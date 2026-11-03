@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSimulation } from '../src/core/simulation.js';
-import { createShipment, transitionShipment } from '../src/core/shipments.js';
+import { createShipment, transitionShipment, parseAndValidateShipmentsCsv, exportShipmentsCsv } from '../src/core/shipments.js';
+
 test('same seed yields identical positions after equal ticks', () => {
   const options = { seed: 77, vehicles: [{ id: 'V-1', x: 10, y: 20, speed: 2 }] };
   const a = createSimulation(options), b = createSimulation(options);
   for (let i = 0; i < 20; i++) assert.deepEqual(a.step(), b.step());
 });
+
 test('pause prevents automatic advance; step works; reset replays', () => {
   const sim = createSimulation({ vehicles: [{ id: 'V-1', x: 1, y: 2 }] });
   assert.equal(sim.advance().tick, 0);
@@ -15,6 +17,7 @@ test('pause prevents automatic advance; step works; reset replays', () => {
   sim.pause(); assert.equal(sim.advance().tick, 2);
   sim.reset(); assert.deepEqual(sim.step().vehicles, first);
 });
+
 test('shipment validates input and enforces transitions', () => {
   assert.throws(() => createShipment({ id: '', origin: 'A', destination: 'B', weightKg: 2 }));
   const draft = createShipment({ id: 'S-1', origin: 'A', destination: 'B', weightKg: 2 });
@@ -22,4 +25,20 @@ test('shipment validates input and enforces transitions', () => {
   const ready = transitionShipment(draft, 'READY', '2026-01-01T00:00:00Z');
   assert.equal(ready.status, 'READY'); assert.equal(draft.status, 'DRAFT');
   assert.equal(ready.history.length, 1);
+});
+
+test('simulation supports setSpeed and setScenario', () => {
+  const sim = createSimulation({ seed: 77, vehicles: [{ id: 'V-1', x: 10, y: 20 }] });
+  sim.setSpeed(2);
+  assert.equal(sim.snapshot().speedMultiplier, 2);
+  sim.setScenario('TRAFFIC_DELAY');
+  assert.equal(sim.snapshot().scenario, 'TRAFFIC_DELAY');
+});
+
+test('csv parsing and formula injection export sanitization', () => {
+  const csv = `id,origin,destination,weightKg\nS-1,JKT,SUB,500\n=CMD,A,B,100\nS-1,JKT,SUB,200`;
+  const parsed = parseAndValidateShipmentsCsv(csv);
+  assert.equal(parsed.length, 2);
+  const exported = exportShipmentsCsv([{ id: '=CMD', origin: 'A', destination: 'B', weightKg: 100, status: 'DRAFT' }]);
+  assert.match(exported, /'=CMD/);
 });
