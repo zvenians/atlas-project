@@ -1,1 +1,816 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>ATLAS Real-Time Logistics Command Center</title><style>body{font-family:Arial,sans-serif;background-color:#0f172a;color:#f8fafc;margin:0;padding:40px;text-align:center;}h1{color:#38bdf8;}footer{margin-top:50px;color:#94a3b8;}</style></head><body><h1>ATLAS: Real-Time Logistics Command Center v2.0.0</h1><p>Enterprise Flagship Platform</p><footer>Copyright &copy; 2026 Kevin Oloan Simatupang. All rights reserved.</footer></body></html>
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>ATLAS Real-Time Logistics Command Center</title><style>body{font-family:Arial,sans-serif;background-color:#0f172a;color:#f8fafc;margin:0;padding:40px;text-align:center;}h1{color:#38bdf8;}footer{margin-top:50px;color:#94a3b8;}</style></head><body><h1>ATLAS: Real-Time Logistics Command Center v2.0.0</h1<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATLAS — Real-Time Logistics Command Center v2.0.0 Enterprise Flagship</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        obsidian: '#10141A',
+        copper: '#DCA876',
+        teal: '#65C9B6',
+        surface: '#161C24',
+        borderDark: '#262F3D'
+      },
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace']
+      }
+    }
+  }
+}
+</script>
+<style>
+body { background-color: #10141A; color: #E2E8F0; font-family: 'Inter', sans-serif; }
+.font-mono { font-family: 'JetBrains Mono', monospace; }
+</style>
+</head>
+<body class="bg-obsidian min-h-screen flex flex-col justify-between text-slate-200">
+<div>
+  <!-- HEADER -->
+  <header class="bg-surface border-b border-borderDark px-4 py-3 sticky top-0 z-50 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded bg-copper/20 border border-copper flex items-center justify-center font-bold text-copper text-xl">A</div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-bold text-base tracking-wide text-white">ATLAS Logistics Command</h1>
+          <span class="bg-copper/20 text-copper border border-copper/40 text-xs px-2 py-0.5 rounded font-mono font-semibold">v2.0.0 ENTERPRISE FLAGSHIP</span>
+          <span class="bg-teal/20 text-teal border border-teal/40 text-xs px-2 py-0.5 rounded font-mono">SIMULATED DATA (SEED=77)</span>
+        </div>
+        <div class="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+          <span>Balikpapan Command Center</span> • 
+          <span id="vclock" class="font-mono text-teal font-semibold">14:30:00 WITA</span>
+        </div>
+      </div>
+    </div>
+    <div class="flex items-center gap-3 flex-wrap">
+      <!-- Sim Controls -->
+      <div class="bg-obsidian p-1 rounded border border-borderDark flex items-center gap-1">
+        <button onclick="setSimState('RUNNING')" id="btn-play" class="px-2 py-1 text-xs bg-teal text-obsidian font-bold rounded hover:bg-teal/80">▶ Play</button>
+        <button onclick="setSimState('PAUSED')" id="btn-pause" class="px-2 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600">⏸ Pause</button>
+        <button onclick="stepSim()" class="px-2 py-1 text-xs bg-slate-700 text-slate-200 rounded hover:bg-slate-600">⏭ Step</button>
+      </div>
+      <!-- Presets -->
+      <div class="flex items-center gap-1 text-xs">
+        <span class="text-slate-400">Preset:</span>
+        <select id="scenarioPreset" onchange="changeScenario(this.value)" class="bg-obsidian border border-borderDark text-xs rounded px-2 py-1 text-copper focus:outline-none">
+          <option value="NORMAL_DELIVERY">NORMAL_DELIVERY</option>
+          <option value="TRAFFIC_DELAY">TRAFFIC_DELAY</option>
+          <option value="VEHICLE_STOP">VEHICLE_STOP</option>
+          <option value="SIGNAL_LOSS">SIGNAL_LOSS</option>
+          <option value="ROUTE_DEVIATION">ROUTE_DEVIATION</option>
+        </select>
+      </div>
+      <!-- Role Switcher -->
+      <div class="flex items-center gap-1 text-xs">
+        <span class="text-slate-400">Role:</span>
+        <select id="roleSwitcher" onchange="changeRole(this.value)" class="bg-obsidian border border-borderDark text-xs rounded px-2 py-1 text-teal focus:outline-none">
+          <option value="GUEST_DEMO">GUEST_DEMO</option>
+          <option value="TENANT_ADMIN">TENANT_ADMIN</option>
+          <option value="DISPATCHER">DISPATCHER</option>
+          <option value="DRIVER">DRIVER</option>
+          <option value="CUSTOMER">CUSTOMER</option>
+          <option value="AUDITOR">AUDITOR</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <!-- NAV TABS -->
+  <nav class="bg-surface/50 border-b border-borderDark px-4 flex gap-1 overflow-x-auto text-sm font-medium">
+    <button onclick="switchTab('overview')" id="tab-overview" class="py-2.5 px-4 border-b-2 border-copper text-copper font-semibold">Overview & Live Map Balikpapan</button>
+    <button onclick="switchTab('shipments')" id="tab-shipments" class="py-2.5 px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200">Shipments & Bulk CSV Importer</button>
+    <button onclick="switchTab('dispatch')" id="tab-dispatch" class="py-2.5 px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200">Smart Dispatch Desk (VRP-TW & LTL)</button>
+    <button onclick="switchTab('fleet')" id="tab-fleet" class="py-2.5 px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200">Fleet & IoT Telemetry</button>
+    <button onclick="switchTab('pwa')" id="tab-pwa" class="py-2.5 px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200">Trips, Driver PWA & Digital e-POD</button>
+    <button onclick="switchTab('alerts')" id="tab-alerts" class="py-2.5 px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200">Alerts & Rule Builder</button>
+    <button onclick="switchTab('analytics')" id="tab-analytics" class="py-2.5 px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200">Analytics & Heatmap</button>
+  </nav>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="p-4 max-w-7xl mx-auto space-y-6">
+
+    <!-- TAB 1: OVERVIEW & MAP -->
+    <section id="sec-overview" class="space-y-4">
+      <!-- 6 KPI CARDS -->
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="bg-surface border border-borderDark p-3 rounded-lg shadow">
+          <div class="text-xs text-slate-400">Active Shipments</div>
+          <div class="text-2xl font-bold font-mono text-copper mt-1">142</div>
+          <div class="text-[10px] text-teal mt-1">↑ 12% vs yesterday</div>
+        </div>
+        <div class="bg-surface border border-borderDark p-3 rounded-lg shadow">
+          <div class="text-xs text-slate-400">Fleet Online</div>
+          <div class="text-2xl font-bold font-mono text-teal mt-1">20 / 20</div>
+          <div class="text-[10px] text-slate-400 mt-1">100% telemetry synced</div>
+        </div>
+        <div class="bg-surface border border-borderDark p-3 rounded-lg shadow">
+          <div class="text-xs text-slate-400">On-Time Rate</div>
+          <div class="text-2xl font-bold font-mono text-emerald-400 mt-1">98.4%</div>
+          <div class="text-[10px] text-emerald-500 mt-1">SLA Target > 95%</div>
+        </div>
+        <div class="bg-surface border border-borderDark p-3 rounded-lg shadow">
+          <div class="text-xs text-slate-400">Fuel Efficiency</div>
+          <div class="text-2xl font-bold font-mono text-white mt-1">4.2 <span class="text-xs">km/L</span></div>
+          <div class="text-[10px] text-slate-400 mt-1">Balikpapan Eco-Fleet</div>
+        </div>
+        <div class="bg-surface border border-borderDark p-3 rounded-lg shadow">
+          <div class="text-xs text-slate-400">Active Alerts</div>
+          <div class="text-2xl font-bold font-mono text-amber-400 mt-1" id="kpi-alerts">3</div>
+          <div class="text-[10px] text-amber-500 mt-1">1 Temp Breach</div>
+        </div>
+        <div class="bg-surface border border-borderDark p-3 rounded-lg shadow">
+          <div class="text-xs text-slate-400">Total Distance</div>
+          <div class="text-2xl font-bold font-mono text-slate-200 mt-1">1,840 <span class="text-xs">km</span></div>
+          <div class="text-[10px] text-teal mt-1">6 Corridors Covered</div>
+        </div>
+      </div>
+
+      <!-- MAP SECTION -->
+      <div class="bg-surface border border-borderDark rounded-lg p-4 relative shadow">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div class="flex items-center gap-2">
+            <h2 class="font-bold text-white text-base">Live Map Balikpapan (Bay & Road Corridors)</h2>
+            <span class="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">Kariangau • Sepinggan • Semayang • MT Haryono • Somber • KM 13</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <button onclick="toggleMapPitch()" id="btn-pitch" class="bg-obsidian border border-borderDark px-2.5 py-1 rounded text-copper font-mono hover:bg-slate-800">Mode: 2D Tactical View</button>
+            <button onclick="toggleTrafficOverlay()" id="btn-traffic" class="bg-obsidian border border-borderDark px-2.5 py-1 rounded text-teal hover:bg-slate-800">Traffic: ON</button>
+          </div>
+        </div>
+
+        <!-- MAP CONTAINER -->
+        <div id="map-box" class="w-full h-96 bg-[#0B0F14] rounded border border-borderDark relative overflow-hidden flex items-center justify-center">
+          <svg id="svg-map" class="w-full h-full transition-transform duration-500" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet">
+            <!-- Balikpapan Water/Bay -->
+            <path d="M0,350 Q 250,300 500,450 T 1000,500 L 1000,600 L 0,600 Z" fill="#0E1A24" stroke="#1E2D3D" stroke-width="2"/>
+            <text x="350" y="520" fill="#2E4A62" font-size="16" font-family="JetBrains Mono">Teluk Balikpapan (Balikpapan Bay)</text>
+
+            <!-- Geofence Polygons -->
+            <!-- Kariangau Industrial Zone -->
+            <polygon points="120,80 320,60 350,180 150,220" fill="rgba(101,201,182,0.12)" stroke="#65C9B6" stroke-width="1.5" stroke-dasharray="4,4"/>
+            <text x="160" y="140" fill="#65C9B6" font-size="12" font-family="JetBrains Mono">Geofence: Kariangau Hub</text>
+
+            <!-- Somber Logistics Zone -->
+            <polygon points="400,160 580,140 600,260 420,280" fill="rgba(220,168,118,0.12)" stroke="#DCA876" stroke-width="1.5" stroke-dasharray="4,4"/>
+            <text x="430" y="210" fill="#DCA876" font-size="12" font-family="JetBrains Mono">Geofence: Somber Hub</text>
+
+            <!-- Main Road Corridors -->
+            <!-- KM 13 -> Kariangau -->
+            <path d="M 200,40 L 200,100 L 450,180" fill="none" stroke="#334155" stroke-width="6"/>
+            <!-- MT Haryono Corridor -->
+            <path id="corridor-mth" d="M 450,180 L 650,240 L 800,380" fill="none" stroke="#F59E0B" stroke-width="6" opacity="0.9"/>
+            <!-- Semayang Corridor -->
+            <path d="M 450,180 L 350,380 L 250,420" fill="none" stroke="#334155" stroke-width="6"/>
+            <!-- Sepinggan Airport Corridor -->
+            <path d="M 800,380 L 920,440" fill="none" stroke="#334155" stroke-width="6"/>
+
+            <!-- Hub Markers -->
+            <g class="hubs">
+              <circle cx="200" cy="40" r="7" fill="#65C9B6"/><text x="212" y="44" fill="#E2E8F0" font-size="11">KM 13 Hub</text>
+              <circle cx="220" cy="120" r="7" fill="#65C9B6"/><text x="232" y="124" fill="#E2E8F0" font-size="11">Kariangau Port</text>
+              <circle cx="450" cy="180" r="7" fill="#DCA876"/><text x="462" y="175" fill="#E2E8F0" font-size="11">Somber Hub</text>
+              <circle cx="650" cy="240" r="7" fill="#65C9B6"/><text x="662" y="235" fill="#E2E8F0" font-size="11">MT Haryono Hub</text>
+              <circle cx="250" cy="420" r="7" fill="#65C9B6"/><text x="262" y="425" fill="#E2E8F0" font-size="11">Semayang Port</text>
+              <circle cx="920" cy="440" r="7" fill="#65C9B6"/><text x="820" y="455" fill="#E2E8F0" font-size="11">Sepinggan Airport Hub</text>
+            </g>
+
+            <!-- 20 Moving Vehicles -->
+            <g id="vehicle-dots"></g>
+          </svg>
+          <div class="absolute bottom-3 left-3 bg-obsidian/90 border border-borderDark px-3 py-1.5 rounded text-xs flex gap-4">
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-teal inline-block"></span> Normal Vehicle (18)</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span> Traffic Delayed (1)</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span> Reefer Alert (1)</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: SHIPMENTS -->
+    <section id="sec-shipments" class="space-y-4 hidden">
+      <div class="flex flex-wrap items-center justify-between gap-3 bg-surface p-4 border border-borderDark rounded-lg shadow">
+        <div class="flex items-center gap-3">
+          <input type="text" placeholder="Search Shipment ID, Client..." class="bg-obsidian border border-borderDark text-xs rounded px-3 py-2 w-64 focus:outline-none focus:border-copper">
+          <select class="bg-obsidian border border-borderDark text-xs rounded px-3 py-2 text-slate-300">
+            <option>All Statuses</option>
+            <option>IN_TRANSIT</option>
+            <option>READY</option>
+            <option>DELIVERED</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="markReady()" class="bg-slate-700 hover:bg-slate-600 text-xs px-3 py-2 rounded text-white font-medium">Mark Ready</button>
+          <button onclick="openNewShipmentModal()" class="bg-copper hover:bg-copper/80 text-obsidian font-bold text-xs px-3 py-2 rounded">+ New Shipment</button>
+          <button onclick="openCsvModal()" class="bg-teal hover:bg-teal/80 text-obsidian font-bold text-xs px-3 py-2 rounded">Bulk CSV Import (FR-027)</button>
+        </div>
+      </div>
+
+      <div class="bg-surface border border-borderDark rounded-lg overflow-hidden shadow">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-obsidian border-b border-borderDark text-slate-400 font-mono">
+            <tr>
+              <th class="p-3">SHIPMENT ID</th>
+              <th class="p-3">ORIGIN - DESTINATION</th>
+              <th class="p-3">CARGO / WEIGHT</th>
+              <th class="p-3">ASSIGNED FLEET</th>
+              <th class="p-3">STATUS</th>
+              <th class="p-3">ACTION</th>
+            </tr>
+          </thead>
+          <tbody id="shipment-tbody" class="divide-y divide-borderDark text-slate-300">
+            <tr>
+              <td class="p-3 font-mono text-copper">SHP-BPN-9012</td>
+              <td class="p-3">Kariangau Port → MT Haryono Hub</td>
+              <td class="p-3">Mining Equipment (4,200 kg)</td>
+              <td class="p-3 font-mono">BPN-TRK-01</td>
+              <td class="p-3"><span id="st-9012" class="bg-teal/20 text-teal px-2 py-0.5 rounded font-mono">IN_TRANSIT</span></td>
+              <td class="p-3"><button onclick="alert('Viewing SHP-BPN-9012 Details')" class="text-copper underline">View</button></td>
+            </tr>
+            <tr>
+              <td class="p-3 font-mono text-copper">SHP-BPN-9013</td>
+              <td class="p-3">Semayang Terminal → Sepinggan Hub</td>
+              <td class="p-3">Reefer Cold Cargo (1,800 kg)</td>
+              <td class="p-3 font-mono">BPN-TRK-04</td>
+              <td class="p-3"><span id="st-9013" class="bg-amber-400/20 text-amber-400 px-2 py-0.5 rounded font-mono">WARNING_TEMP</span></td>
+              <td class="p-3"><button onclick="alert('Viewing SHP-BPN-9013 Details')" class="text-copper underline">View</button></td>
+            </tr>
+            <tr>
+              <td class="p-3 font-mono text-copper">SHP-BPN-9014</td>
+              <td class="p-3">Somber Industrial → KM 13 Freight Hub</td>
+              <td class="p-3">General Consumer Goods (850 kg)</td>
+              <td class="p-3 font-mono">BPN-VAN-08</td>
+              <td class="p-3"><span id="st-9014" class="bg-slate-700 text-slate-300 px-2 py-0.5 rounded font-mono">STAGED</span></td>
+              <td class="p-3"><button onclick="alert('Viewing SHP-BPN-9014 Details')" class="text-copper underline">View</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 3: SMART DISPATCH DESK -->
+    <section id="sec-dispatch" class="space-y-4 hidden">
+      <div class="bg-surface border border-borderDark p-4 rounded-lg shadow space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="font-bold text-white text-base">VRP-TW & Multi-Stop LTL Optimization Desk</h2>
+            <div class="text-xs text-slate-400 mt-0.5 font-mono">Scoring Formula: Score = <span class="text-copper">0.35*dist</span> + <span class="text-teal">0.35*eta</span> + <span class="text-purple-400">0.20*cap_fit</span> + <span class="text-emerald-400">0.10*route</span></div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="runConcurrencyTest()" class="bg-slate-700 hover:bg-slate-600 text-xs px-3 py-2 rounded text-slate-200">Run 50x Concurrency Race Test (CON-01)</button>
+            <button onclick="consolidateLtl()" class="bg-teal hover:bg-teal/80 text-obsidian font-bold text-xs px-3 py-2 rounded">Consolidate Multi-Stop LTL Manifest</button>
+            <button onclick="solveVrp()" class="bg-copper hover:bg-copper/80 text-obsidian font-bold text-xs px-3 py-2 rounded">Solve & Commit Global Batch VRP-TW</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-surface border border-borderDark rounded-lg overflow-hidden shadow">
+        <div class="p-3 bg-obsidian border-b border-borderDark font-bold text-xs text-slate-300 flex justify-between">
+          <span>RANKED DISPATCH CANDIDATES (BALIKPAPAN CORRIDORS)</span>
+          <span id="vrp-status-badge" class="text-teal font-mono">STATUS: OPTIMIZED</span>
+        </div>
+        <table class="w-full text-left text-xs">
+          <thead class="bg-obsidian/50 border-b border-borderDark text-slate-400 font-mono">
+            <tr>
+              <th class="p-3">RANK</th>
+              <th class="p-3">VEHICLE ID</th>
+              <th class="p-3">CAPACITY FIT</th>
+              <th class="p-3">ESTIMATED ETA</th>
+              <th class="p-3">OVERALL SCORE</th>
+              <th class="p-3">RECOMMENDATION</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-borderDark text-slate-300">
+            <tr>
+              <td class="p-3 font-mono font-bold text-copper">#1</td>
+              <td class="p-3 font-mono">BPN-TRK-01 (Kariangau)</td>
+              <td class="p-3">94% (4.2 / 4.5 Tons)</td>
+              <td class="p-3 font-mono text-teal">18 mins</td>
+              <td class="p-3 font-mono font-bold text-emerald-400 text-sm">94.8 / 100</td>
+              <td class="p-3"><span class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono">OPTIMAL_DISPATCH</span></td>
+            </tr>
+            <tr>
+              <td class="p-3 font-mono font-bold text-slate-400">#2</td>
+              <td class="p-3 font-mono">BPN-VAN-08 (Somber)</td>
+              <td class="p-3">82% (1.2 / 1.5 Tons)</td>
+              <td class="p-3 font-mono text-teal">24 mins</td>
+              <td class="p-3 font-mono font-bold text-teal text-sm">88.2 / 100</td>
+              <td class="p-3"><span class="bg-teal/20 text-teal px-2 py-0.5 rounded font-mono">HIGH_MATCH</span></td>
+            </tr>
+            <tr>
+              <td class="p-3 font-mono font-bold text-slate-500">#3</td>
+              <td class="p-3 font-mono">BPN-TRK-04 (Semayang)</td>
+              <td class="p-3">60% (2.1 / 3.5 Tons)</td>
+              <td class="p-3 font-mono text-amber-400">38 mins</td>
+              <td class="p-3 font-mono font-bold text-slate-400 text-sm">74.5 / 100</td>
+              <td class="p-3"><span class="bg-slate-700 text-slate-300 px-2 py-0.5 rounded font-mono">BACKUP_OPTION</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="dispatch-output" class="hidden bg-obsidian border border-borderDark p-3 rounded text-xs font-mono text-teal"></div>
+    </section>
+
+    <!-- TAB 4: FLEET & IOT TELEMETRY -->
+    <section id="sec-fleet" class="space-y-4 hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Fleet Table -->
+        <div class="lg:col-span-2 bg-surface border border-borderDark rounded-lg overflow-hidden shadow">
+          <div class="p-3 bg-obsidian border-b border-borderDark flex justify-between items-center">
+            <span class="font-bold text-xs text-white">BALIKPAPAN FLEET TELEMETRY STATUS</span>
+            <div class="flex gap-2">
+              <button onclick="injectReeferBreach()" class="bg-red-500/20 text-red-400 border border-red-500/40 text-[11px] px-2 py-1 rounded hover:bg-red-500/30">Inject Reefer Temp Breach (+4.8°C)</button>
+              <button onclick="toggleMaintenance()" class="bg-slate-700 text-xs px-2 py-1 rounded text-white hover:bg-slate-600">Schedule/Complete Maintenance (FR-015)</button>
+            </div>
+          </div>
+          <table class="w-full text-left text-xs">
+            <thead class="bg-obsidian/50 border-b border-borderDark text-slate-400 font-mono">
+              <tr>
+                <th class="p-3">VEHICLE ID</th>
+                <th class="p-3">PROTOCOL</th>
+                <th class="p-3">FUEL %</th>
+                <th class="p-3">REEFER TEMP</th>
+                <th class="p-3">STATUS</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-borderDark text-slate-300">
+              <tr>
+                <td class="p-3 font-mono text-copper">BPN-TRK-01</td>
+                <td class="p-3 font-mono">TELTONIKA_CODEC8</td>
+                <td class="p-3"><div class="w-24 bg-obsidian rounded-full h-2 inline-block overflow-hidden mr-2"><div class="bg-teal h-2" style="width:78%"></div></div>78%</td>
+                <td class="p-3 font-mono text-slate-400">N/A (Dry Cargo)</td>
+                <td class="p-3"><span id="maint-status-01" class="bg-teal/20 text-teal px-2 py-0.5 rounded font-mono">ACTIVE_ONLINE</span></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono text-copper">BPN-TRK-04</td>
+                <td class="p-3 font-mono">MEITRACK_P88</td>
+                <td class="p-3"><div class="w-24 bg-obsidian rounded-full h-2 inline-block overflow-hidden mr-2"><div class="bg-teal h-2" style="width:62%"></div></div>62%</td>
+                <td class="p-3 font-mono font-bold text-amber-400" id="reefer-temp-val">+3.2°C</td>
+                <td class="p-3"><span id="maint-status-04" class="bg-teal/20 text-teal px-2 py-0.5 rounded font-mono">ACTIVE_ONLINE</span></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono text-copper">BPN-VAN-08</td>
+                <td class="p-3 font-mono">QUECLINK_GL300</td>
+                <td class="p-3"><div class="w-24 bg-obsidian rounded-full h-2 inline-block overflow-hidden mr-2"><div class="bg-emerald-400 h-2" style="width:91%"></div></div>91%</td>
+                <td class="p-3 font-mono text-slate-400">N/A (Dry Cargo)</td>
+                <td class="p-3"><span class="bg-teal/20 text-teal px-2 py-0.5 rounded font-mono">ACTIVE_ONLINE</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- IoT Protocol Decoder Panel -->
+        <div class="bg-surface border border-borderDark rounded-lg p-4 shadow space-y-3">
+          <h3 class="font-bold text-white text-xs">IoT Hardware Protocol Decoder</h3>
+          <div class="flex gap-1 text-[11px] font-mono">
+            <button onclick="setDecoder('TELTONIKA_CODEC8')" id="dec-teltonika" class="px-2 py-1 bg-copper text-obsidian font-bold rounded">TELTONIKA_CODEC8</button>
+            <button onclick="setDecoder('MEITRACK_P88')" id="dec-meitrack" class="px-2 py-1 bg-obsidian border border-borderDark text-slate-300 rounded">MEITRACK_P88</button>
+            <button onclick="setDecoder('QUECLINK_GL300')" id="dec-queclink" class="px-2 py-1 bg-obsidian border border-borderDark text-slate-300 rounded">QUECLINK_GL300</button>
+          </div>
+          <div class="space-y-2 text-xs font-mono">
+            <div class="text-slate-400">Raw Hex Payload:</div>
+            <div id="decoder-hex" class="bg-obsidian p-2 rounded border border-borderDark text-copper break-all">000000000000003B08010000018B823D3A80011686120000000000000000</div>
+            <div class="text-slate-400">Decoded Telemetry JSON:</div>
+            <pre id="decoder-json" class="bg-obsidian p-2 rounded border border-borderDark text-teal text-[11px] overflow-x-auto">{
+  "protocol": "TELTONIKA_CODEC8",
+  "imei": "864201048829102",
+  "gps": {"lat": -1.2421, "lng": 116.8612},
+  "speed_kmh": 48.5,
+  "fuel_pct": 78
+}</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: TRIPS & DIGITAL E-POD -->
+    <section id="sec-pwa" class="space-y-4 hidden">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Multi-Stop LTL Sequence -->
+        <div class="bg-surface border border-borderDark p-4 rounded-lg shadow space-y-3">
+          <div class="flex justify-between items-center border-b border-borderDark pb-2">
+            <h3 class="font-bold text-white text-xs">Driver Manifest: Multi-Stop LTL Trip #TRP-8801</h3>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-400">Offline Mode:</span>
+              <button onclick="toggleOfflineMode()" id="btn-offline" class="bg-obsidian border border-borderDark px-2 py-1 rounded text-xs font-mono text-teal">OFF (Synced)</button>
+            </div>
+          </div>
+          <div class="space-y-3 text-xs">
+            <div class="flex items-center gap-3 bg-obsidian/60 p-2.5 rounded border border-borderDark">
+              <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-mono font-bold">1</span>
+              <div>
+                <div class="font-bold text-white">Semayang Terminal (Origin Pickup)</div>
+                <div class="text-slate-400 text-[11px]">Completed at 08:15 WITA • Verified</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 bg-obsidian/60 p-2.5 rounded border border-copper">
+              <span class="w-6 h-6 rounded-full bg-copper/20 text-copper flex items-center justify-center font-mono font-bold">2</span>
+              <div>
+                <div class="font-bold text-copper">Sepinggan Hub (Current Dropoff)</div>
+                <div class="text-slate-300 text-[11px]">e-POD Confirmation Pending</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 bg-obsidian/60 p-2.5 rounded border border-borderDark">
+              <span class="w-6 h-6 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center font-mono font-bold">3</span>
+              <div>
+                <div class="font-bold text-slate-300">KM 13 Logistics Park (Final Stop)</div>
+                <div class="text-slate-400 text-[11px]">Scheduled 16:45 WITA</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- HTML5 Canvas e-POD -->
+        <div class="bg-surface border border-borderDark p-4 rounded-lg shadow space-y-3">
+          <h3 class="font-bold text-white text-xs">Digital e-POD Signature Capture</h3>
+          <div class="border border-borderDark bg-obsidian rounded p-2 text-center">
+            <canvas id="sig-canvas" width="380" height="140" class="bg-[#0B0F14] border border-slate-700 rounded cursor-crosshair mx-auto"></canvas>
+            <div class="flex justify-between items-center mt-2 px-1">
+              <button onclick="clearCanvas()" class="text-xs text-slate-400 hover:text-slate-200">Clear Signature</button>
+              <button onclick="submitEpod()" class="bg-teal hover:bg-teal/80 text-obsidian font-bold text-xs px-3 py-1.5 rounded">Submit e-POD</button>
+            </div>
+          </div>
+          <div id="epod-hash-box" class="bg-obsidian border border-borderDark p-3 rounded text-xs space-y-1 font-mono">
+            <div class="text-slate-400">Geotag Verification: <span class="text-emerald-400">-1.2421, 116.8612 (Sepinggan Hub - VERIFIED)</span></div>
+            <div class="text-slate-400">SHA-256 Hash: <span id="sha256-val" class="text-copper break-all">e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 6: ALERTS & RULE BUILDER -->
+    <section id="sec-alerts" class="space-y-4 hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Alerts Deduplicated List -->
+        <div class="lg:col-span-2 bg-surface border border-borderDark rounded-lg p-4 shadow space-y-3">
+          <h3 class="font-bold text-white text-xs">Active Incidents & Deduplicated Alerts</h3>
+          <div class="space-y-2 text-xs">
+            <div id="alert-card-1" class="bg-obsidian p-3 rounded border border-red-500/40 flex justify-between items-start">
+              <div>
+                <div class="font-bold text-red-400 font-mono">INC-8812 • REEFER_TEMP_BREACH (+3.2°C > Threshold +2.0°C)</div>
+                <div class="text-slate-400 text-[11px] mt-0.5">Vehicle BPN-TRK-04 • Corridor Sepinggan Hub • 4 deduplicated signals</div>
+              </div>
+              <div class="flex gap-2">
+                <button onclick="ackAlert(1)" id="btn-ack-1" class="bg-amber-500/20 text-amber-400 border border-amber-500/40 px-2 py-1 rounded">ACKNOWLEDGE</button>
+                <button onclick="resolveAlert(1)" class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-1 rounded">RESOLVE (Note Required)</button>
+              </div>
+            </div>
+            <div id="alert-card-2" class="bg-obsidian p-3 rounded border border-amber-500/40 flex justify-between items-start">
+              <div>
+                <div class="font-bold text-amber-400 font-mono">INC-8810 • TRAFFIC_CONGESTION_DELAY (+22 min ETA impact)</div>
+                <div class="text-slate-400 text-[11px] mt-0.5">Vehicle BPN-TRK-01 • Corridor MT Haryono • 2 deduplicated signals</div>
+              </div>
+              <div class="flex gap-2">
+                <button onclick="ackAlert(2)" id="btn-ack-2" class="bg-amber-500/20 text-amber-400 border border-amber-500/40 px-2 py-1 rounded">ACKNOWLEDGE</button>
+                <button onclick="resolveAlert(2)" class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-1 rounded">RESOLVE (Note Required)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rule Builder FR-033 -->
+        <div class="bg-surface border border-borderDark rounded-lg p-4 shadow space-y-3">
+          <h3 class="font-bold text-white text-xs">Rule Builder Threshold Modifier (FR-033)</h3>
+          <form onsubmit="saveRuleThresholds(event)" class="space-y-3 text-xs">
+            <div>
+              <label class="block text-slate-400 mb-1">Max Reefer Temp Threshold (°C)</label>
+              <input type="number" step="0.1" id="rule-temp" value="2.0" class="w-full bg-obsidian border border-borderDark rounded px-3 py-1.5 text-copper font-mono">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">Max Speed Limit Warning (km/h)</label>
+              <input type="number" id="rule-speed" value="70" class="w-full bg-obsidian border border-borderDark rounded px-3 py-1.5 text-teal font-mono">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">Dwell Time Incident Trigger (mins)</label>
+              <input type="number" id="rule-dwell" value="45" class="w-full bg-obsidian border border-borderDark rounded px-3 py-1.5 text-white font-mono">
+            </div>
+            <button type="submit" class="w-full bg-copper hover:bg-copper/80 text-obsidian font-bold py-2 rounded">Save Rule Thresholds</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 7: ANALYTICS & HEATMAP -->
+    <section id="sec-analytics" class="space-y-4 hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Status Distribution Chart -->
+        <div class="bg-surface border border-borderDark p-4 rounded-lg shadow space-y-3">
+          <div class="flex justify-between items-center">
+            <h3 class="font-bold text-white text-xs">Status Distribution & Fleet Health</h3>
+            <div class="flex gap-2">
+              <button onclick="compactPartitions()" class="bg-slate-700 hover:bg-slate-600 text-xs px-2.5 py-1 rounded text-slate-200">Compact Telemetry Partitions (PART-01)</button>
+              <button onclick="exportCsv()" class="bg-teal text-obsidian font-bold text-xs px-2.5 py-1 rounded">Export CSV (SEC-08 Safe)</button>
+            </div>
+          </div>
+          <div class="space-y-3 text-xs">
+            <div>
+              <div class="flex justify-between text-[11px] mb-1"><span>ON_SCHEDULE (85%)</span><span class="font-mono text-emerald-400">120 Shipments</span></div>
+              <div class="w-full bg-obsidian rounded-full h-3"><div class="bg-emerald-500 h-3 rounded-full" style="width: 85%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-[11px] mb-1"><span>MINOR_DELAY (10%)</span><span class="font-mono text-amber-400">15 Shipments</span></div>
+              <div class="w-full bg-obsidian rounded-full h-3"><div class="bg-amber-400 h-3 rounded-full" style="width: 10%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-[11px] mb-1"><span>CRITICAL_ALERT (5%)</span><span class="font-mono text-red-400">7 Shipments</span></div>
+              <div class="w-full bg-obsidian rounded-full h-3"><div class="bg-red-500 h-3 rounded-full" style="width: 5%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 10 Balikpapan Hubs Heatmap -->
+        <div class="bg-surface border border-borderDark p-4 rounded-lg shadow space-y-3">
+          <h3 class="font-bold text-white text-xs">Geospatial Hub Dwell-Time & Incident Heatmap (10 Balikpapan Hubs)</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-obsidian border-b border-borderDark text-slate-400 font-mono">
+                <tr>
+                  <th class="p-2">HUB NAME</th>
+                  <th class="p-2">DWELL TIME</th>
+                  <th class="p-2">INCIDENT HEAT</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-borderDark text-slate-300">
+                <tr><td class="p-2 font-medium">1. Kariangau Port</td><td class="p-2 font-mono">32 min</td><td class="p-2"><span class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono">LOW</span></td></tr>
+                <tr><td class="p-2 font-medium">2. Sepinggan Airport</td><td class="p-2 font-mono">24 min</td><td class="p-2"><span class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono">LOW</span></td></tr>
+                <tr><td class="p-2 font-medium">3. Semayang Terminal</td><td class="p-2 font-mono">48 min</td><td class="p-2"><span class="bg-amber-400/20 text-amber-400 px-2 py-0.5 rounded font-mono">MEDIUM</span></td></tr>
+                <tr><td class="p-2 font-medium">4. MT Haryono Logistics Hub</td><td class="p-2 font-mono">55 min</td><td class="p-2"><span class="bg-red-500/20 text-red-400 px-2 py-0.5 rounded font-mono">HIGH</span></td></tr>
+                <tr><td class="p-2 font-medium">5. Somber Industrial Zone</td><td class="p-2 font-mono">28 min</td><td class="p-2"><span class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono">LOW</span></td></tr>
+                <tr><td class="p-2 font-medium">6. KM 13 Freight Terminal</td><td class="p-2 font-mono">38 min</td><td class="p-2"><span class="bg-amber-400/20 text-amber-400 px-2 py-0.5 rounded font-mono">MEDIUM</span></td></tr>
+                <tr><td class="p-2 font-medium">7. Batu Ampar Park</td><td class="p-2 font-mono">19 min</td><td class="p-2"><span class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono">LOW</span></td></tr>
+                <tr><td class="p-2 font-medium">8. Manggar Hub</td><td class="p-2 font-mono">22 min</td><td class="p-2"><span class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono">LOW</span></td></tr>
+                <tr><td class="p-2 font-medium">9. Kebun Sayur Depot</td><td class="p-2 font-mono">31 min</td><td class="p-2"><span class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono">LOW</span></td></tr>
+                <tr><td class="p-2 font-medium">10. Kampung Baru Pier</td><td class="p-2 font-mono">42 min</td><td class="p-2"><span class="bg-amber-400/20 text-amber-400 px-2 py-0.5 rounded font-mono">MEDIUM</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- MODALS -->
+<!-- New Shipment Modal -->
+<div id="modal-new-shipment" class="fixed inset-0 bg-black/70 hidden flex items-center justify-center z-50 p-4">
+  <div class="bg-surface border border-borderDark rounded-lg p-5 max-w-md w-full space-y-4">
+    <h3 class="font-bold text-white text-base">Create New Balikpapan Shipment</h3>
+    <div class="space-y-3 text-xs">
+      <div><label class="text-slate-400 block mb-1">Origin Hub</label><input type="text" value="Kariangau Port" class="w-full bg-obsidian border border-borderDark rounded p-2 text-white"></div>
+      <div><label class="text-slate-400 block mb-1">Destination Hub</label><input type="text" value="Sepinggan Hub" class="w-full bg-obsidian border border-borderDark rounded p-2 text-white"></div>
+      <div><label class="text-slate-400 block mb-1">Cargo Details & Weight</label><input type="text" value="Mining Spare Parts (2,500 kg)" class="w-full bg-obsidian border border-borderDark rounded p-2 text-white"></div>
+    </div>
+    <div class="flex justify-end gap-2">
+      <button onclick="closeModal('modal-new-shipment')" class="bg-slate-700 text-xs px-3 py-2 rounded text-white">Cancel</button>
+      <button onclick="saveNewShipment()" class="bg-copper text-obsidian font-bold text-xs px-3 py-2 rounded">Save Shipment</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk CSV Import Modal (FR-027) -->
+<div id="modal-csv-import" class="fixed inset-0 bg-black/70 hidden flex items-center justify-center z-50 p-4">
+  <div class="bg-surface border border-borderDark rounded-lg p-5 max-w-md w-full space-y-4">
+    <h3 class="font-bold text-white text-base">Bulk CSV Import (FR-027)</h3>
+    <div class="border-2 border-dashed border-borderDark rounded-lg p-6 text-center bg-obsidian text-xs text-slate-400">
+      <p>Drag & Drop CSV Manifest file here, or click to browse</p>
+      <p class="text-[10px] text-copper mt-1">Expected format: ID, Origin, Destination, Weight, ETA</p>
+    </div>
+    <div class="flex justify-end gap-2">
+      <button onclick="closeModal('modal-csv-import')" class="bg-slate-700 text-xs px-3 py-2 rounded text-white">Cancel</button>
+      <button onclick="processCsvImport()" class="bg-teal text-obsidian font-bold text-xs px-3 py-2 rounded">Import 50 Records</button>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER PERMANENT -->
+<footer class="bg-surface border-t border-borderDark py-4 px-6 text-center text-xs text-slate-400 mt-8">
+  <p>Copyright &copy; 2026 Kevin Oloan Simatupang. All rights reserved.</p>
+</footer>
+
+<!-- SCRIPT LOGIC -->
+<script>
+// Virtual Clock
+setInterval(() => {
+  const d = new Date();
+  const timeStr = d.toLocaleTimeString('id-ID', { timeZone: 'Asia/Makassar' }) + ' WITA';
+  document.getElementById('vclock').innerText = timeStr;
+}, 1000);
+
+// Tab Navigation
+function switchTab(tabId) {
+  const tabs = ['overview', 'shipments', 'dispatch', 'fleet', 'pwa', 'alerts', 'analytics'];
+  tabs.forEach(t => {
+    document.getElementById('sec-' + t).classList.add('hidden');
+    const btn = document.getElementById('tab-' + t);
+    btn.classList.remove('border-copper', 'text-copper', 'font-semibold');
+    btn.classList.add('border-transparent', 'text-slate-400');
+  });
+  document.getElementById('sec-' + tabId).classList.remove('hidden');
+  const activeBtn = document.getElementById('tab-' + tabId);
+  activeBtn.classList.remove('border-transparent', 'text-slate-400');
+  activeBtn.classList.add('border-copper', 'text-copper', 'font-semibold');
+}
+
+// 20 Vehicles map generation
+const vContainer = document.getElementById('vehicle-dots');
+const vehicleData = [];
+for(let i=1; i<=20; i++) {
+  const x = Math.floor(Math.random() * 700) + 150;
+  const y = Math.floor(Math.random() * 350) + 80;
+  const color = i === 1 ? '#F59E0B' : (i === 4 ? '#EF4444' : '#65C9B6');
+  vehicleData.push({ id: i, x, y, color });
+  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  circle.setAttribute('id', 'veh-' + i);
+  circle.setAttribute('cx', x);
+  circle.setAttribute('cy', y);
+  circle.setAttribute('r', '5');
+  circle.setAttribute('fill', color);
+  vContainer.appendChild(circle);
+}
+
+// Interactive Map Toggles
+let is3DPitch = false;
+function toggleMapPitch() {
+  is3DPitch = !is3DPitch;
+  const svg = document.getElementById('svg-map');
+  const btn = document.getElementById('btn-pitch');
+  if(is3DPitch) {
+    svg.style.transform = 'perspective(600px) rotateX(25deg)';
+    btn.innerText = 'Mode: 3D Vector Pitch';
+  } else {
+    svg.style.transform = 'none';
+    btn.innerText = 'Mode: 2D Tactical View';
+  }
+}
+
+let trafficOn = true;
+function toggleTrafficOverlay() {
+  trafficOn = !trafficOn;
+  const mth = document.getElementById('corridor-mth');
+  const btn = document.getElementById('btn-traffic');
+  if(trafficOn) {
+    mth.setAttribute('stroke', '#F59E0B');
+    btn.innerText = 'Traffic: ON';
+  } else {
+    mth.setAttribute('stroke', '#334155');
+    btn.innerText = 'Traffic: OFF';
+  }
+}
+
+// Sim Controls
+function setSimState(st) {
+  alert('Simulation State: ' + st);
+}
+function stepSim() {
+  alert('Simulation Stepped (+1 Cycle)');
+}
+function changeScenario(val) {
+  alert('Scenario preset updated to: ' + val);
+}
+function changeRole(val) {
+  alert('Active User Role set to: ' + val);
+}
+
+// Modal actions
+function openNewShipmentModal() { document.getElementById('modal-new-shipment').classList.remove('hidden'); }
+function openCsvModal() { document.getElementById('modal-csv-import').classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+function saveNewShipment() {
+  closeModal('modal-new-shipment');
+  alert('New Shipment Created & Enqueued successfully!');
+}
+function processCsvImport() {
+  closeModal('modal-csv-import');
+  alert('FR-027 Bulk Import Complete: 50 Valid Records Imported!');
+}
+function markReady() {
+  document.getElementById('st-9014').className = 'bg-teal/20 text-teal px-2 py-0.5 rounded font-mono';
+  document.getElementById('st-9014').innerText = 'READY';
+  alert('Shipment SHP-BPN-9014 marked as READY!');
+}
+
+// Dispatch actions
+function solveVrp() {
+  document.getElementById('vrp-status-badge').innerText = 'STATUS: BATCH_SOLVED_COMMIT';
+  alert('Global Batch VRP-TW Optimization Solved & Committed!');
+}
+function consolidateLtl() {
+  alert('Multi-Stop LTL Manifest Consolidated (3 Orders merged into TRP-8801)');
+}
+function runConcurrencyTest() {
+  const out = document.getElementById('dispatch-output');
+  out.classList.remove('hidden');
+  out.innerText = 'CON-01 Concurrency Test: 50 parallel VRP execution threads finished in 142ms. 0 Race Conditions detected. Lock Integrity: OK.';
+}
+
+// Fleet actions
+function injectReeferBreach() {
+  document.getElementById('reefer-temp-val').innerText = '+8.0°C (BREACH)';
+  document.getElementById('reefer-temp-val').className = 'font-mono font-bold text-red-500';
+  document.getElementById('st-9013').innerText = 'REEFER_BREACH';
+  document.getElementById('st-9013').className = 'bg-red-500/20 text-red-400 px-2 py-0.5 rounded font-mono';
+  alert('Alert Injected: Reefer Temp Breach (+4.8°C Spike recorded)!');
+}
+function toggleMaintenance() {
+  const el = document.getElementById('maint-status-01');
+  if(el.innerText.includes('ACTIVE')) {
+    el.className = 'bg-amber-400/20 text-amber-400 px-2 py-0.5 rounded font-mono';
+    el.innerText = 'MAINTENANCE_SCHEDULED';
+  } else {
+    el.className = 'bg-teal/20 text-teal px-2 py-0.5 rounded font-mono';
+    el.innerText = 'ACTIVE_ONLINE';
+  }
+}
+
+// IoT Protocol Decoder
+function setDecoder(proto) {
+  const h = document.getElementById('decoder-hex');
+  const j = document.getElementById('decoder-json');
+  if(proto === 'TELTONIKA_CODEC8') {
+    h.innerText = '000000000000003B08010000018B823D3A80011686120000000000000000';
+    j.innerText = '{\n  "protocol": "TELTONIKA_CODEC8",\n  "imei": "864201048829102",\n  "gps": {"lat": -1.2421, "lng": 116.8612},\n  "speed_kmh": 48.5,\n  "fuel_pct": 78\n}';
+  } else if(proto === 'MEITRACK_P88') {
+    h.innerText = '2424002C3836343230313034383832393130327C31322E33343536';
+    j.innerText = '{\n  "protocol": "MEITRACK_P88",\n  "device_id": "P88-BPN-04",\n  "reefer_temp_c": 3.2,\n  "battery_v": 12.4\n}';
+  } else {
+    h.innerText = '+RESP:GTFRI,02010B,864201048829102,,0,1,1,116.8612,-1.2421';
+    j.innerText = '{\n  "protocol": "QUECLINK_GL300",\n  "battery_pct": 95,\n  "signal_dbm": -72,\n  "motion": true\n}';
+  }
+}
+
+// Canvas & Signature e-POD
+const canvas = document.getElementById('sig-canvas');
+const ctx = canvas ? canvas.getContext('2d') : null;
+let drawing = false;
+if(canvas) {
+  ctx.strokeStyle = '#65C9B6';
+  ctx.lineWidth = 2;
+  canvas.addEventListener('mousedown', () => drawing = true);
+  canvas.addEventListener('mouseup', () => { drawing = false; ctx.beginPath(); });
+  canvas.addEventListener('mousemove', draw);
+}
+function draw(e) {
+  if(!drawing) return;
+  const rect = canvas.getBoundingClientRect();
+  ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+}
+function clearCanvas() {
+  if(ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+function submitEpod() {
+  document.getElementById('sha256-val').innerText = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08';
+  alert('e-POD Signature Submitted & SHA-256 Geotag Hash Verified!');
+}
+
+let isOffline = false;
+function toggleOfflineMode() {
+  isOffline = !isOffline;
+  const btn = document.getElementById('btn-offline');
+  if(isOffline) {
+    btn.innerText = 'ON (Queue: 2 item)';
+    btn.className = 'bg-amber-400/20 border border-amber-400 px-2 py-1 rounded text-xs font-mono text-amber-400';
+    localStorage.setItem('atlas_offline_queue', JSON.stringify(['EPOD-8801-SIG']));
+  } else {
+    btn.innerText = 'OFF (Synced)';
+    btn.className = 'bg-obsidian border border-borderDark px-2 py-1 rounded text-xs font-mono text-teal';
+    localStorage.removeItem('atlas_offline_queue');
+  }
+}
+
+// Alert actions
+function ackAlert(id) {
+  const btn = document.getElementById('btn-ack-' + id);
+  btn.innerText = 'ACKNOWLEDGED';
+  btn.className = 'bg-slate-700 text-slate-300 px-2 py-1 rounded';
+}
+function resolveAlert(id) {
+  const note = prompt('Mandatory resolution note for INC-881' + id + ':');
+  if(note) {
+    document.getElementById('alert-card-' + id).remove();
+    alert('Incident Resolved with note: ' + note);
+  }
+}
+function saveRuleThresholds(e) {
+  e.preventDefault();
+  alert('FR-033 Thresholds updated successfully!');
+}
+
+// Analytics actions
+function compactPartitions() {
+  alert('PART-01 Telemetry Partition Compaction executed successfully!');
+}
+function exportCsv() {
+  alert('SEC-08 Safe CSV Export initiated.');
+}
+</script>
+</body>
+</html>
