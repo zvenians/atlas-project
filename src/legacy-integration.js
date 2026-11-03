@@ -80,7 +80,7 @@ window.saveNewShipment = () => {
   const origin = fields[0]?.value.trim();
   const destination = fields[1]?.value.trim();
   const cargo = fields[2]?.value.trim() || '';
-  const match = cargo.match(/([\\d,]+)\\s*kg/i);
+  const match = cargo.match(/([\d,]+)\s*kg/i);
   const weightKg = match ? Number(match[1].replaceAll(',', '')) : NaN;
   try {
     const shipment = createShipment({ id: 'SHP-DEMO-' + String(nextId).padStart(4, '0'), origin, destination, weightKg });
