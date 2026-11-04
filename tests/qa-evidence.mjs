@@ -71,6 +71,11 @@ try {
       await page.goto(url+'#legacy',{waitUntil:'domcontentloaded'});
       await page.waitForFunction(()=>Boolean(window.ATLAS_V21?.sim),null,{timeout:15000});
       await capture('legacy-operations','#atlas-legacy-workspace');
+      assert.equal(await page.locator('#sec-fleet #cargo-bay-digital-twin').count(),1,
+        'Cargo Digital Twin must live in Fleet section, not after the footer');
+      const legacyWidth=await page.evaluate(()=>document.documentElement.scrollWidth);
+      assert.ok(legacyWidth<=size.width+8,
+        'legacy horizontal viewport overflow: '+legacyWidth+'px at '+size.width+'px');
       // Verify legacy preserved nav: every operations section remains reachable and visible.
       for (const key of ['overview','shipments','dispatch','fleet','pwa','alerts','analytics']) {
         await page.evaluate(k=>window.switchTab(k),key);

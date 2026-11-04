@@ -69,7 +69,7 @@ function initCameraToolbar() {
         ${cameraState.is3D ? '3D Pitch (48°)' : '2D Ortho (0°)'}
       </button>
     </div>
-    <div class="flex items-center gap-1">
+    <div class="flex flex-wrap items-center gap-1" style="min-width:0;max-width:100%">
       <span class="text-slate-400 mr-1">Tilt:</span>
       <button id="btn-tilt-dn" class="px-2 py-1 bg-[#161C24] border border-[#262F3D] text-[#DCA876] rounded hover:border-[#DCA876]">Tilt -</button>
       <button id="btn-tilt-up" class="px-2 py-1 bg-[#161C24] border border-[#262F3D] text-[#DCA876] rounded hover:border-[#DCA876]">Tilt +</button>
@@ -210,7 +210,7 @@ function renderCargoTwin(vehicle) {
     if (inspector) {
       inspector.appendChild(twinCard);
     } else {
-      const sidebar = document.querySelector('#atlas-legacy-workspace aside') || $('atlas-legacy-workspace');
+      const sidebar = $('sec-fleet') || $('atlas-legacy-workspace');
       sidebar.appendChild(twinCard);
     }
   }
