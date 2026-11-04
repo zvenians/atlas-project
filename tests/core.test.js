@@ -42,3 +42,24 @@ test('csv parsing and formula injection export sanitization', () => {
   const exported = exportShipmentsCsv([{ id: '=CMD', origin: 'A', destination: 'B', weightKg: 100, status: 'DRAFT' }]);
   assert.match(exported, /'=CMD/);
 });
+
+test('simulation bridge contract emits immutable snapshots for all controls', () => {
+  const sim = createSimulation({ seed: 77, vehicles: [{ id: 'V-1', x: 10, y: 20, speed: 2 }] });
+  const seen = [];
+  const unsubscribe = sim.subscribe(s => seen.push(s));
+  assert.deepEqual(sim.getSnapshot(), sim.snapshot());
+  sim.play(); sim.step(); sim.setSpeed(2); sim.setScenario('TRAFFIC_DELAY'); sim.pause(); sim.reset();
+  assert.equal(seen.length, 6);
+  assert.equal(sim.snapshot().tick, 0);
+  assert.equal(sim.snapshot().status, 'PAUSED');
+  seen[1].vehicles[0].x = 123456;
+  assert.notEqual(sim.snapshot().vehicles[0].x, 123456);
+  unsubscribe(); sim.play();
+  assert.equal(seen.length, 6);
+});
+
+test('invalid prototype speed and scenario are rejected', () => {
+  const sim = createSimulation();
+  assert.throws(() => sim.setSpeed(5), RangeError);
+  assert.throws(() => sim.setScenario('NONEXISTENT'), RangeError);
+});

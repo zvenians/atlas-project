@@ -25,7 +25,7 @@ const notice = document.createElement('div');
 notice.setAttribute('role', 'status');
 notice.setAttribute('aria-live', 'polite');
 notice.className = 'fixed bottom-4 right-4 z-50 bg-[#10141A] border border-[#65C9B6] text-[#65C9B6] p-3 rounded-lg text-xs font-mono shadow-xl';
-notice.textContent = 'v2.1 demo engine ready - 3D Tactical Viewport active.';
+notice.textContent = 'Local simulated tactical prototype ready (not verified 3D GIS).';
 document.body.appendChild(notice);
 
 function notify(message) { notice.textContent = message; }
@@ -39,7 +39,7 @@ let cameraState = {
 };
 
 function applyCameraTransform() {
-  const mapSvg = document.querySelector('svg');
+  const mapSvg = $('svg-map');
   if (!mapSvg) return;
   const container = mapSvg.parentElement || mapSvg;
   container.style.transformOrigin = 'center center';
@@ -53,7 +53,7 @@ function applyCameraTransform() {
 }
 
 function initCameraToolbar() {
-  const mapSvg = document.querySelector('svg');
+  const mapSvg = $('svg-map');
   if (!mapSvg) return;
   const mapContainer = mapSvg.parentElement;
   if (!mapContainer || $('atlas-3d-camera-bar')) return;
@@ -128,7 +128,7 @@ function initCameraToolbar() {
 }
 
 function init3DHubTowers() {
-  const mapSvg = document.querySelector('svg');
+  const mapSvg = $('svg-map');
   if (!mapSvg) return;
 
   let layer = document.getElementById('hub-3d-layer');
@@ -172,7 +172,7 @@ function init3DHubTowers() {
 }
 
 function renderPolesAndVehicles(vehicles) {
-  const mapSvg = document.querySelector('svg');
+  const mapSvg = $('svg-map');
   if (!mapSvg) return;
 
   let poleGroup = document.getElementById('vehicle-poles-layer');
@@ -210,7 +210,7 @@ function renderCargoTwin(vehicle) {
     if (inspector) {
       inspector.appendChild(twinCard);
     } else {
-      const sidebar = document.querySelector('aside') || document.body;
+      const sidebar = document.querySelector('#atlas-legacy-workspace aside') || $('atlas-legacy-workspace');
       sidebar.appendChild(twinCard);
     }
   }
@@ -273,7 +273,7 @@ function renderCargoTwin(vehicle) {
 
 function render(snapshot) {
   for (const v of snapshot.vehicles) {
-    const dot = $(`veh-${v.id}`);
+    const dot = $(`veh-${String(v.id).replace(/^V-/, '')}`);
     if (dot) {
       dot.setAttribute('cx', v.x);
       dot.setAttribute('cy', v.y);
@@ -282,7 +282,7 @@ function render(snapshot) {
   renderPolesAndVehicles(snapshot.vehicles);
 
   const badge = $('atlas-sim-status');
-  if (badge) badge.textContent = `SIM: ${snapshot.status} · TICK ${snapshot.tick} · SPEED ${snapshot.speed}x`;
+  if (badge) badge.textContent = `SIM: ${snapshot.status} · TICK ${snapshot.tick} · SPEED ${snapshot.speedMultiplier}x`;
 
   const selVeh = snapshot.vehicles.find(v => v.id === selectedVehicleId) || snapshot.vehicles[0];
   if (selVeh) renderCargoTwin(selVeh);
@@ -301,13 +301,16 @@ const btnStep = $('btn-step');
 if (btnStep) btnStep.addEventListener('click', () => { sim.step(); notify('Step advanced.'); });
 const btnSpeed = $('btn-speed');
 if (btnSpeed) btnSpeed.addEventListener('click', () => {
-  const current = sim.getSnapshot().speed;
+  const current = sim.getSnapshot().speedMultiplier;
   const next = current === 1 ? 2 : current === 2 ? 4 : 1;
   sim.setSpeed(next);
   notify(`Simulation speed set to ${next}x.`);
 });
 
 sim.subscribe(render);
+// Browser-local prototype clock; persistent server sandbox is a later stage.
+const intervalId = window.setInterval(() => sim.advance(), 1000);
+window.addEventListener('pagehide', () => window.clearInterval(intervalId), { once: true });
 
 document.addEventListener('click', (e) => {
   const pole = e.target.closest('[data-veh-id]');
