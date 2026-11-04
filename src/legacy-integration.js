@@ -41,7 +41,8 @@ let cameraState = {
 function applyCameraTransform() {
   const mapSvg = $('svg-map');
   if (!mapSvg) return;
-  const container = mapSvg.parentElement || mapSvg;
+  // Transform the SVG *inside* the clipping map box, never the box itself.
+  const container = mapSvg;
   container.style.transformOrigin = 'center center';
   container.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
   
