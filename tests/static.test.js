@@ -39,3 +39,17 @@ test('bridge uses scoped map selector and subscribed engine contract', () => {
   assert.match(bridge, /speedMultiplier/);
   assert.match(bridge, /\$\('svg-map'\)/);
 });
+
+test('B-P0-02: primary S03 camera and simulation controls do not silently fake actions', () => {
+  assert.doesNotMatch(html, /function\s+resetOrbit\s*\(\s*\)\s*\{\s*\}/, 'resetOrbit must not be an empty no-op');
+  assert.match(html, /function\s+setCamMode[\s\S]*?atlasLegacyNotice/, 'setCamMode must honestly disclose prototype camera limitation');
+  assert.match(html, /function\s+toggleSimPlay[\s\S]*?ATLAS_V21/, 'toggleSimPlay must connect to canonical ATLAS_V21.sim state');
+  assert.match(html, /function\s+resetSim[\s\S]*?ATLAS_V21/, 'resetSim must reset canonical ATLAS_V21.sim state');
+  });
+
+test('B-P0-04: canvas animation loops and legacy timers gate on visibility and clean up on pagehide', () => {
+  assert.match(html, /cancelAnimationFrame/, 'canvas loops must support cancelAnimationFrame when view is hidden');
+  assert.match(html, /__atlasCanvasLoops/, 'canvas loop lifecycle controller must be exposed for QA verification');
+  assert.match(html, /visibilitychange/, 'canvas loops must pause when document is hidden');
+  assert.match(bridge, /pauseAnimations/, 'legacy SVG SMIL animations must pause when legacy map is hidden');
+  });
