@@ -365,6 +365,70 @@ if (document.readyState === 'interactive' || document.readyState === 'complete')
   render(sim.getSnapshot());
   syncLegacyMapAnimations();
 }
+function initPrimaryControlsBridge() {
+  const getActivePrimaryViewId = () => {
+    if (document.hidden || location.hash === '#legacy') return null;
+    for (const id of ['view-landing', 'view-overview', 'view-map']) {
+      const el = document.getElementById(id);
+      if (el && !el.classList.contains('hidden') && !el.hidden) return id;
+    }
+    return null;
+  };
+  let rafId = null;
+  window.__atlasCanvasLoops = {
+    sync() { if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; } },
+    stopAll() { if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; } },
+    getActiveLoopCount() { return getActivePrimaryViewId() ? 1 : 0; }
+  };
+  window.syncPrimarySimUI = (snap) => {
+    if (!snap) return;
+    window.simPlaying = snap.status === 'RUNNING';
+    const btn = document.getElementById('sim-play-btn');
+    if (btn) btn.innerText = window.simPlaying ? '⏸' : '▶';
+    const speedSel = document.getElementById('sim-speed');
+    if (speedSel) {
+      const opts = speedSel.querySelectorAll('option');
+      if (opts[0]) opts[0].value = '1';
+      if (opts[1]) opts[1].value = '2';
+      if (opts[2]) { opts[2].value = '4'; opts[2].textContent = '4x'; }
+      speedSel.value = String(snap.speedMultiplier);
+    }
+  };
+  window.setCamMode = function setCamMode(mode) {
+    for (const m of ['free', 'follow', 'chase']) {
+      const node = document.getElementById('cam-' + m);
+      if (node) node.style.color = '#94A3B8';
+    }
+    const el = document.getElementById('cam-' + mode);
+    if (el) el.style.color = '#2DD4BF';
+    if (typeof window.atlasLegacyNotice === 'function') window.atlasLegacyNotice('Camera mode ' + mode + ' is not implemented in 2D prototype.');
+  };
+  window.resetOrbit = function resetOrbit() {
+    if (typeof window.atlasLegacyNotice === 'function') window.atlasLegacyNotice('Orbit reset is not implemented in 2D prototype.');
+  };
+  window.toggleSimPlay = function toggleSimPlay() {
+    const next = window.ATLAS_V21.sim.snapshot().status === 'RUNNING' ? window.ATLAS_V21.sim.pause() : window.ATLAS_V21.sim.play();
+    window.syncPrimarySimUI(next);
+  };
+  window.resetSim = function resetSim() {
+    window.syncPrimarySimUI(window.ATLAS_V21.sim.reset());
+  };
+  window.changePrimarySimSpeed = function changePrimarySimSpeed(val) {
+    window.syncPrimarySimUI(window.ATLAS_V21.sim.setSpeed(Number(val)));
+  };
+  const speedSel = document.getElementById('sim-speed');
+  if (speedSel && !speedSel.__atlasBound) {
+    speedSel.__atlasBound = true;
+    const opts = speedSel.querySelectorAll('option');
+    if (opts[0]) opts[0].value = '1';
+    if (opts[1]) opts[1].value = '2';
+    if (opts[2]) { opts[2].value = '4'; opts[2].textContent = '4x'; }
+    speedSel.addEventListener('change', (e) => window.changePrimarySimSpeed(e.target.value));
+  }
+  window.syncPrimarySimUI(sim.getSnapshot());
+}
+initPrimaryControlsBridge();
+document.addEventListener('DOMContentLoaded', initPrimaryControlsBridge);
 
 window.ATLAS_V21 = {
   sim,
