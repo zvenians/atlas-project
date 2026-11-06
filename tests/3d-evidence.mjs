@@ -49,7 +49,7 @@ const port = server.address().port;
 const url = `http://127.0.0.1:${port}/`;
 
 const report = {
-  version: 'Hermes Realism Lock v4.0',
+  version: 'Hermes Realism Lock v4.1',
   timestamp: new Date().toISOString(),
   screenshots: [],
   assertions: [],
@@ -195,6 +195,24 @@ try {
   assert.equal(mapState.corridorsCount, 20, 'Engine must contain 20 vehicle route assignments');
   report.assertions.push('MapLibre GL JS authoritative engine state verified');
 
+  // Wait for asynchronous GLB truck model loading into fleet
+  await mapPage.waitForFunction(() => {
+    const info = window.__atlas3DGetModelInfo?.(3);
+    return info && info.isGLTF === true && info.meshCount === 5;
+  }, { timeout: 10000 });
+
+  // Verification: Hero GLB Truck Model Metadata
+  const heroInfo = await mapPage.evaluate(() => window.__atlas3DGetModelInfo?.(3));
+  assert.ok(heroInfo, 'Hero model info must be present');
+  assert.equal(heroInfo.isGLTF, true, 'Hero vehicle must be glTF/GLB model');
+  assert.equal(heroInfo.hasGLB, true, 'Hero vehicle must have GLB asset');
+  assert.equal(heroInfo.modelUrl, '/models/CesiumMilkTruck.glb', 'Hero vehicle must reference canonical GLB asset');
+  assert.equal(heroInfo.inScene, true, 'Hero vehicle must be attached to active Three.js scene');
+  assert.equal(heroInfo.meshCount, 5, 'Hero vehicle must contain 5 submeshes');
+  assert.equal(heroInfo.materialCount, 4, 'Hero vehicle must have 4 materials');
+  assert.ok(heroInfo.bounds && (heroInfo.bounds.size.length > 5 || heroInfo.bounds.size.z > 5 || heroInfo.bounds.size.x > 5), 'Hero vehicle must have realistic commercial bounding dimensions');
+  report.assertions.push('Authentic GLB Hero truck runtime model metadata verified (5 submeshes, 4 materials, valid bounds)');
+
   // 7. Realistic 3D Truck Macro Three-Quarter Close-up (Hero Model Proof)
   await mapPage.evaluate(() => window.inspectHeroTruck('front-3q'));
   await mapPage.waitForTimeout(600);
@@ -268,6 +286,9 @@ try {
   // 15. Free Tactical Camera Mode
   await mapPage.evaluate(() => window.resetOrbit());
   await mapPage.waitForTimeout(600);
+  const camFree = await mapPage.evaluate(() => window.__atlas3DGetCameraState?.());
+  assert.equal(camFree?.mode, 'free');
+  assert.ok(camFree.altitudeMeters > 0, `Free mode altitude must be positive, got ${camFree.altitudeMeters}`);
   await captureProof(mapPage, '15-camera-mode-free.png', '15. Tactical Free Orbit Camera Mode Perspective');
   report.assertions.push('Free tactical camera mode verified');
 
@@ -279,27 +300,32 @@ try {
   await mapPage.waitForTimeout(600);
   const camFollow = await mapPage.evaluate(() => window.__atlas3DGetCameraState?.());
   assert.equal(camFollow?.mode, 'follow');
-  assert.ok(camFollow.position.y < 60, `Follow elevation must be < 60, got ${camFollow.position.y}`);
-  await captureProof(mapPage, '16-camera-mode-follow.png', '16. Follow Camera Mode — Tracking TRK-001 at 55° Pitch');
-  report.assertions.push('Follow camera mode verified (tracking vehicle coordinates)');
+  assert.ok(camFollow.altitudeMeters > 0 && camFollow.altitudeMeters < 1500, `Follow altitude must be realistic near ground, got ${camFollow.altitudeMeters}`);
+  assert.ok(camFollow.zoom >= 18, `Follow zoom must be >= 18 for close vehicle tracking, got ${camFollow.zoom}`);
+  assert.ok(camFollow.targetVehiclePosition, 'Follow mode must track target vehicle position');
+  await captureProof(mapPage, '16-camera-mode-follow.png', '16. Follow Camera Mode — Tracking TRK-001 at 58° Pitch');
+  report.assertions.push('Follow camera mode verified (tracking vehicle coordinates at high zoom)');
 
   // 17. Chase Camera Mode (Low Behind-Vehicle Tracking)
   await mapPage.evaluate(() => window.setCamMode('chase'));
   await mapPage.waitForTimeout(600);
   const camChase = await mapPage.evaluate(() => window.__atlas3DGetCameraState?.());
   assert.equal(camChase?.mode, 'chase');
-  assert.ok(camChase.position.y < 25, `Chase elevation must be < 25, got ${camChase.position.y}`);
-  await captureProof(mapPage, '17-camera-mode-chase.png', '17. Chase Camera Mode — Low Dynamic Chase Perspective at 70° Pitch');
-  report.assertions.push('Chase camera mode verified (low behind-vehicle chase angle)');
+  assert.ok(camChase.altitudeMeters > 0 && camChase.altitudeMeters <= camFollow.altitudeMeters, `Chase altitude must be lower or equal to follow altitude, got ${camChase.altitudeMeters}`);
+  assert.ok(camChase.zoom >= 19.5, `Chase zoom must be >= 19.5, got ${camChase.zoom}`);
+  assert.ok(camChase.pitch >= 65, `Chase pitch must be low dynamic angle >= 65, got ${camChase.pitch}`);
+  await captureProof(mapPage, '17-camera-mode-chase.png', '17. Chase Camera Mode — Low Dynamic Chase Perspective at 72° Pitch');
+  report.assertions.push('Chase camera mode verified (low behind-vehicle chase angle at 72° pitch)');
 
   // 18. High-Altitude Regional Overview Camera Mode
   await mapPage.evaluate(() => window.setCamMode('overview'));
   await mapPage.waitForTimeout(800);
   const camOverview = await mapPage.evaluate(() => window.__atlas3DGetCameraState?.());
   assert.equal(camOverview?.mode, 'overview');
-  assert.ok(camOverview.position.y > 200, `Overview elevation must be > 200, got ${camOverview.position.y}`);
+  assert.ok(camOverview.altitudeMeters > 2500, `Overview altitude must be high regional > 2500m, got ${camOverview.altitudeMeters}`);
+  assert.ok(camOverview.zoom <= 13, `Overview zoom must be regional <= 13, got ${camOverview.zoom}`);
   await captureProof(mapPage, '18-camera-mode-overview.png', '18. Regional Overview Camera Perspective Covering Balikpapan Bay Network');
-  report.assertions.push('Overview camera mode verified (elevated perspective Y > 200)');
+  report.assertions.push('Overview camera mode verified (regional perspective > 2500m)');
 
   // 19. Multiple Commercial Vehicles Traveling Along Highway Network
   await mapPage.evaluate(() => {
@@ -333,13 +359,40 @@ try {
   assert.equal(hashes.size, 20, 'Must have exactly 20 unique screenshot hashes');
   report.assertions.push('Zero duplicate screenshots verified (20 unique SHA-256 hashes)');
 
-  // --- Performance Verification (Optimized Draw Calls & Geometry) ---
+  // --- Performance Verification (Measured Draw Calls & Geometry) ---
   const renderInfo = await mapPage.evaluate(() => window.__atlas3DGetRenderInfo?.());
-  assert.ok(renderInfo && renderInfo.calls > 0, `Active WebGL draw calls must be > 0, got ${renderInfo?.calls}`);
-  assert.ok(renderInfo && renderInfo.triangles > 100, `Active 3D triangles rendered must be > 100, got ${renderInfo?.triangles}`);
+  assert.ok(renderInfo && renderInfo.available === true, 'getRenderInfo must report available WebGL performance measurement');
+  assert.ok(renderInfo.calls > 0, `Active WebGL draw calls must be > 0, got ${renderInfo.calls}`);
+  assert.ok(renderInfo.triangles > 100, `Active 3D triangles rendered must be > 100, got ${renderInfo.triangles}`);
   report.assertions.push(`WebGL draw calls verified (${renderInfo.calls} calls, ${renderInfo.triangles} triangles)`);
   report.metrics.drawCalls = renderInfo.calls;
   report.metrics.triangles = renderInfo.triangles;
+
+  // --- Deterministic Wheel Rotation & Motion Physics Verification ---
+  const wheelRotationCheck = await mapPage.evaluate(() => {
+    const engine = window.__atlas3DEngine;
+    const truck = engine?.fleet?.[3];
+    if (!truck || !truck.userData.wheels || truck.userData.wheels.length === 0) return null;
+    
+    // Measure rotation at 0 distance
+    truck.userData.setWheelRotation(0);
+    const rot0 = truck.userData.wheels[0].rotation.x;
+    
+    // Advance by 1 meter: rotation should be (1 / 0.52) % (2 * Math.PI)
+    truck.userData.setWheelRotation(1);
+    const rot1 = truck.userData.wheels[0].rotation.x;
+    
+    // Advance by full wheel circumference (2 * Math.PI * 0.52 = 3.267256m): rotation should return to 0 (mod 2pi)
+    truck.userData.setWheelRotation(Math.PI * 2 * 0.52);
+    const rotFull = truck.userData.wheels[0].rotation.x;
+
+    return { rot0, rot1, rotFull, expectedRot1: (1 / 0.52) % (Math.PI * 2) };
+  });
+  assert.ok(wheelRotationCheck, 'Wheel rotation check must be valid on GLB truck');
+  assert.equal(wheelRotationCheck.rot0, 0, 'Zero displacement gives zero wheel rotation');
+  assert.ok(Math.abs(wheelRotationCheck.rot1 - wheelRotationCheck.expectedRot1) < 0.0001, 'Wheel rotation matches travel displacement / tire radius');
+  assert.ok(Math.abs(wheelRotationCheck.rotFull) < 0.0001, 'Full circumference roll completes 2pi cycle modulo 0');
+  report.assertions.push('Physically authentic deterministic wheel rotation verified (angularRotation = travelMeters / wheelRadius)');
 
   // --- Deterministic Canonical Simulation Clock Verification ---
   await mapPage.evaluate(() => window.resetSim());
@@ -359,6 +412,57 @@ try {
   const statusAfterToggle = await mapPage.evaluate(() => window.ATLAS_V21.sim.snapshot().status);
   assert.equal(statusAfterToggle, 'RUNNING');
   report.assertions.push('Simulation play synchronization verified');
+
+  // --- NEGATIVE CONTROL 1: Missing GLB Asset Detection ---
+  const negativeAssetTest = await mapPage.evaluate(async () => {
+    const { GLTFLoader } = await import('/src/vendor/GLTFLoader.js');
+    const loader = new GLTFLoader();
+    try {
+      await new Promise((resolve, reject) => {
+        loader.load('/models/non-existent-broken-model.glb', resolve, undefined, reject);
+      });
+      return { failed: false };
+    } catch (err) {
+      return { failed: true, error: err.message || 'Asset not found' };
+    }
+  });
+  assert.equal(negativeAssetTest.failed, true, 'Negative control: system must correctly fail and reject on non-existent GLB asset');
+  report.assertions.push('Negative Control 1: Non-existent GLB asset load failure correctly caught');
+
+  // --- NEGATIVE CONTROL 2: Custom Layer Absence Detection ---
+  const negativeLayerTest = await mapPage.evaluate(() => {
+    const engine = window.__atlas3DEngine;
+    const map = engine?.map;
+    if (!map) return false;
+    return Boolean(map.getLayer('non-existent-ghost-layer'));
+  });
+  assert.equal(negativeLayerTest, false, 'Negative control: query for absent custom layer returns false/null');
+  report.assertions.push('Negative Control 2: Absent 3D custom layer detection correctly verified');
+
+  // --- NEGATIVE CONTROL 3: Frozen Clock / Static Progression Detection ---
+  await mapPage.evaluate(() => {
+    window.ATLAS_V21.sim.pause();
+  });
+  const progBefore = await mapPage.evaluate(() => window.__atlas3DGetVehicleProgress?.(0));
+  await mapPage.waitForTimeout(200);
+  const progAfter = await mapPage.evaluate(() => window.__atlas3DGetVehicleProgress?.(0));
+  assert.equal(progBefore, progAfter, 'Negative control: vehicle progression must remain frozen when simulation is paused');
+  report.assertions.push('Negative Control 3: Paused simulation clock halts vehicle progression');
+
+  // --- NEGATIVE CONTROL 4: Camera Decoupling in Free Mode ---
+  await mapPage.evaluate(() => {
+    window.resetOrbit();
+    const engine = window.__atlas3DEngine;
+    engine.map.jumpTo({ center: [116.8300, -1.2200], zoom: 12.8 });
+  });
+  const freeCenterBefore = await mapPage.evaluate(() => window.__atlas3DEngine.map.getCenter());
+  await mapPage.evaluate(() => {
+    for (let i = 0; i < 10; i++) window.ATLAS_V21.sim.step();
+  });
+  const freeCenterAfter = await mapPage.evaluate(() => window.__atlas3DEngine.map.getCenter());
+  assert.equal(freeCenterBefore.lng, freeCenterAfter.lng, 'Negative control: Free camera center does not move when vehicle moves');
+  assert.equal(freeCenterBefore.lat, freeCenterAfter.lat, 'Negative control: Free camera center does not follow vehicle');
+  report.assertions.push('Negative Control 4: Free camera mode does not track moving vehicle coordinates');
 
   await mapPage.close();
 

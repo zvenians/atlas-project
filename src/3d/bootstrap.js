@@ -43,11 +43,13 @@ export function setup3DCanvases(controllersMap) {
       window.resetOrbit = () => c3.resetCamera?.();
       window.selectMapVehicle = (i) => c3.selectVehicle?.(i);
       window.inspectHeroTruck = (a) => c3.inspectHeroTruck?.(a);
+      window.__atlas3DInspectHeroTruck = (a) => c3.inspectHeroTruck?.(a);
       window.__atlas3DSetCamMode = (m) => c3.setCameraMode?.(m);
       window.__atlas3DResetOrbit = () => c3.resetCamera?.();
       window.__atlas3DGetCameraState = () => c3.getCameraState?.();
       window.__atlas3DGetRenderInfo = () => c3.getRenderInfo?.();
       window.__atlas3DGetVehicleProgress = (i) => c3.getVehicleProgress?.(i);
+      window.__atlas3DGetModelInfo = (i) => c3.getModelInfo?.(i);
     }
   }
 

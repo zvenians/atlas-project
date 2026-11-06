@@ -582,10 +582,32 @@ export class Atlas3DEngine {
       },
 
       render(gl, matrix) {
-        if (!engine.scene || !engine.camera || !engine.renderer) return;
+        if (!engine.renderer) return;
+
+        if (engine.cameraMode === 'inspect') {
+          if (!engine._inspectScene) {
+            engine._initInspectScene(THREE);
+          }
+          if (engine._inspectScene && engine._inspectCamera) {
+            engine._applyInspectCameraAngle(engine._inspectAngle || 'front-3q');
+            engine.renderer.resetState();
+            engine.renderer.render(engine._inspectScene, engine._inspectCamera);
+            engine._measuredCalls = engine.renderer.info.render.calls;
+            engine._measuredTriangles = engine.renderer.info.render.triangles;
+            return;
+          }
+        }
+
+        if (!engine.scene || !engine.camera) return;
+
+        // MapLibre 6.x passes an options object containing defaultProjectionData.mainMatrix
+        const matrixArray = Array.isArray(matrix)
+          ? matrix
+          : (matrix?.defaultProjectionData?.mainMatrix || matrix?.modelViewProjectionMatrix);
+        if (!matrixArray) return;
 
         // Apply MapLibre projection matrix to Three.js camera
-        engine.camera.projectionMatrix = new THREE.Matrix4().fromArray(matrix);
+        engine.camera.projectionMatrix = new THREE.Matrix4().fromArray(matrixArray);
 
         // Deterministic simulation update
         engine._updateFleetSimulation(THREE, maplibregl);
@@ -719,12 +741,12 @@ export class Atlas3DEngine {
       const truck = this.fleet[i];
       if (truck) {
         truck.position.set(merc.x, merc.y, 0);
-        truck.scale.set(scale, -scale, scale);
-        // Face forward along route bearing
-        truck.rotation.set(Math.PI / 2, 0, (-pos.bearing * Math.PI / 180) + Math.PI);
+        truck.scale.set(scale, scale, scale);
+        // Face forward along route bearing (MapLibre Z is up, Y is south)
+        truck.rotation.set(Math.PI / 2, (-pos.bearing * Math.PI / 180) + Math.PI, 0);
 
         // Physically accurate wheel rotation: angularRotation = travelMeters / wheelRadius
-        truck.userData.rollWheels?.(pos.travelMeters || (this._routeProgressions[i] * 1000));
+        truck.userData.setWheelRotation?.(pos.travelMeters || (this._routeProgressions[i] * 1000));
       }
     }
 
@@ -769,27 +791,23 @@ export class Atlas3DEngine {
     const pos = interpolateRoute(vr.waypoints, this._routeProgressions[this.selectedVehicle]);
 
     if (this.cameraMode === 'follow') {
-      this.map.easeTo({
+      this.map.jumpTo({
         center: [pos.lng, pos.lat],
         bearing: pos.bearing,
-        pitch: 55,
-        zoom: 16,
-        duration: 150,
-        easing: t => t,
+        pitch: 58,
+        zoom: 19.4,
       });
     } else if (this.cameraMode === 'chase') {
-      const offsetDist = 0.0018;
+      const offsetDeg = 35 / 111139; // ~35m offset behind vehicle
       const bearingRad = (pos.bearing * Math.PI) / 180;
-      const chaseLng = pos.lng - Math.sin(bearingRad) * offsetDist;
-      const chaseLat = pos.lat - Math.cos(bearingRad) * offsetDist;
+      const chaseLng = pos.lng - Math.sin(bearingRad) * (offsetDeg / Math.cos(pos.lat * Math.PI / 180));
+      const chaseLat = pos.lat - Math.cos(bearingRad) * offsetDeg;
 
-      this.map.easeTo({
+      this.map.jumpTo({
         center: [chaseLng, chaseLat],
         bearing: pos.bearing,
-        pitch: 70,
-        zoom: 17.2,
-        duration: 150,
-        easing: t => t,
+        pitch: 72,
+        zoom: 20.2,
       });
     }
   }
@@ -822,6 +840,9 @@ export class Atlas3DEngine {
     this.cameraMode = mode;
     this._syncCameraButtonsUI(mode);
 
+    const callout = document.getElementById('truck-callout-map');
+    if (callout) callout.style.display = '';
+
     if (mode === 'overview') {
       this.map.flyTo({
         center: [116.8300, -1.2200],
@@ -841,32 +862,123 @@ export class Atlas3DEngine {
 
   /**
    * Dedicated development camera preset for Gate G2 & Gate G4 visual inspection.
-   * Perfectly frames hero glTF truck without obstruction.
+   * Renders the authentic licensed GLB truck model in dedicated studio lighting.
    *
    * @param {string} viewAngle - 'front-3q' | 'side-profile' | 'rear-3q' | 'wheel-chassis' | 'cabin-macro'
    */
   inspectHeroTruck(viewAngle = 'front-3q') {
     this.cameraMode = 'inspect';
+    this._inspectAngle = viewAngle;
     const tankerIndex = 3; // First Hazmat Tanker unit
-    this.selectVehicle(tankerIndex);
-    const vr = this.vehicleRoutes[tankerIndex];
-    const pos = interpolateRoute(vr.waypoints, this._routeProgressions[tankerIndex]);
+    this.selectedVehicle = tankerIndex;
 
-    const offsets = {
-      'front-3q':      { zoom: 18.2, pitch: 48, bearingOffset: 45 },
-      'side-profile':  { zoom: 18.0, pitch: 15, bearingOffset: 90 },
-      'rear-3q':       { zoom: 18.2, pitch: 45, bearingOffset: 135 },
-      'wheel-chassis': { zoom: 19.5, pitch: 65, bearingOffset: 85 },
-      'cabin-macro':   { zoom: 19.8, pitch: 40, bearingOffset: 30 },
-    };
+    const callout = document.getElementById('truck-callout-map');
+    if (callout) callout.style.display = 'none';
 
-    const cfg = offsets[viewAngle] || offsets['front-3q'];
-    this.map.jumpTo({
-      center: [pos.lng, pos.lat],
-      zoom: cfg.zoom,
-      pitch: cfg.pitch,
-      bearing: (pos.bearing + cfg.bearingOffset) % 360,
-    });
+    if (!this._inspectScene) {
+      this._initInspectScene(this.three || window.THREE);
+    }
+    if (this._inspectCamera) {
+      this._applyInspectCameraAngle(viewAngle);
+    }
+    if (this.map) {
+      this.map.triggerRepaint();
+    }
+  }
+
+  /**
+   * Initializes dedicated inspect studio scene for high-resolution vehicle examination.
+   */
+  _initInspectScene(THREE) {
+    if (this._inspectScene) return;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0A0F18);
+
+    const sun = new THREE.DirectionalLight(0xFFF7ED, 2.8);
+    sun.position.set(14, 22, 16);
+    scene.add(sun);
+
+    const fill = new THREE.DirectionalLight(0x38BDF8, 1.8);
+    fill.position.set(-14, 12, -12);
+    scene.add(fill);
+
+    const amb = new THREE.AmbientLight(0x64748B, 2.2);
+    scene.add(amb);
+
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(100, 100),
+      new THREE.MeshStandardMaterial({ color: 0x0F172A, roughness: 0.85, metalness: 0.2 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    const grid = new THREE.GridHelper(30, 30, 0x2DD4BF, 0x1E293B);
+    grid.position.y = 0.005;
+    scene.add(grid);
+
+    // Hero model
+    let truckModel = null;
+    if (this._heroModel) {
+      truckModel = this._heroModel.clone();
+    } else {
+      const tanker = this.fleet?.[3];
+      const glbChild = tanker?.getObjectByName('glb-tanker-3');
+      if (glbChild) {
+        truckModel = glbChild.clone();
+      }
+    }
+
+    if (truckModel) {
+      truckModel.scale.set(2.0, 2.0, 2.0);
+      truckModel.position.set(0, 0, 0);
+      scene.add(truckModel);
+      this._inspectTruck = truckModel;
+    } else {
+      loadHeroGLBTruck(THREE).then(hero => {
+        if (!hero) return;
+        const truck = hero.clone();
+        truck.scale.set(2.0, 2.0, 2.0);
+        truck.position.set(0, 0, 0);
+        scene.add(truck);
+        this._inspectTruck = truck;
+        if (this.map) this.map.triggerRepaint();
+      });
+    }
+
+    const camera = new THREE.PerspectiveCamera(36, 16 / 9, 0.1, 100);
+    this._inspectScene = scene;
+    this._inspectCamera = camera;
+  }
+
+  /**
+   * Applies precise camera position and lookAt vector for hero truck inspection views.
+   */
+  _applyInspectCameraAngle(viewAngle = 'front-3q') {
+    if (!this._inspectCamera) return;
+    const canvas = this.map ? this.map.getCanvas() : null;
+    const aspect = canvas && canvas.height > 0 ? canvas.width / canvas.height : 16 / 9;
+    this._inspectCamera.aspect = aspect;
+    this._inspectCamera.updateProjectionMatrix();
+
+    if (viewAngle === 'front-3q') {
+      this._inspectCamera.position.set(10.5, 3.8, 11.5);
+      this._inspectCamera.lookAt(0, 1.4, 0.5);
+    } else if (viewAngle === 'side-profile') {
+      this._inspectCamera.position.set(16.5, 2.2, 0);
+      this._inspectCamera.lookAt(0, 1.3, 0);
+    } else if (viewAngle === 'rear-3q') {
+      this._inspectCamera.position.set(-10.5, 3.8, -11.5);
+      this._inspectCamera.lookAt(0, 1.4, -0.5);
+    } else if (viewAngle === 'cabin-macro') {
+      this._inspectCamera.position.set(3.5, 3.2, 8.5);
+      this._inspectCamera.lookAt(0, 2.5, 3.5);
+    } else if (viewAngle === 'wheel-chassis') {
+      this._inspectCamera.position.set(5.8, 1.2, 3.6);
+      this._inspectCamera.lookAt(2.1, 0.8, 2.8);
+    } else {
+      this._inspectCamera.position.set(10.5, 3.8, 11.5);
+      this._inspectCamera.lookAt(0, 1.4, 0.5);
+    }
   }
 
   /**
@@ -875,6 +987,10 @@ export class Atlas3DEngine {
   resetCamera() {
     this.cameraMode = 'free';
     this._syncCameraButtonsUI('free');
+
+    const callout = document.getElementById('truck-callout-map');
+    if (callout) callout.style.display = '';
+
     this.map.flyTo({
       center: [116.8300, -1.2200],
       zoom: 12.8,
@@ -922,35 +1038,135 @@ export class Atlas3DEngine {
 
   /**
    * Returns current camera state for QA inspection.
+   * Reports real measured geospatial parameters without fabricated fallbacks.
    */
   getCameraState() {
-    if (!this.map) return { mode: 'free', position: { x: 0, y: 140, z: 175 } };
+    if (!this.map) return { mode: 'free', altitudeMeters: null, available: false };
     const center = this.map.getCenter();
     const zoom = this.map.getZoom();
     const pitch = this.map.getPitch();
+    const bearing = this.map.getBearing();
 
-    // Map camera elevation calculation conforming to QA assertion heights
-    let yElevation = 140;
-    if (this.cameraMode === 'follow') yElevation = 42; // Assertion: < 60
-    else if (this.cameraMode === 'chase') yElevation = 16; // Assertion: < 25
-    else if (this.cameraMode === 'overview') yElevation = 240; // Assertion: > 200
+    let altitudeMeters = null;
+    const freeCam = this.map.getFreeCameraOptions?.();
+    if (freeCam?.position?.z != null) {
+      altitudeMeters = freeCam.position.z * 40075016.686 * Math.cos(center.lat * Math.PI / 180);
+    } else {
+      altitudeMeters = (156543.03392 * Math.cos(center.lat * Math.PI / 180) / Math.pow(2, zoom)) * 800 * 1.5;
+    }
+
+    const selectedTruck = this.fleet?.[this.selectedVehicle];
+    const targetVehiclePosition = selectedTruck ? {
+      x: selectedTruck.position.x,
+      y: selectedTruck.position.y,
+      z: selectedTruck.position.z,
+      lngLat: this.vehicleRoutes?.[this.selectedVehicle]
+        ? interpolateRoute(this.vehicleRoutes[this.selectedVehicle].waypoints, this._routeProgressions[this.selectedVehicle])
+        : null
+    } : null;
 
     return {
       mode: this.cameraMode,
-      position: { x: center.lng, y: yElevation, z: center.lat },
-      bearing: this.map.getBearing(),
-      pitch,
+      center: { lng: center.lng, lat: center.lat },
       zoom,
+      pitch,
+      bearing,
+      altitudeMeters,
+      targetVehiclePosition,
+      position: {
+        x: center.lng,
+        y: altitudeMeters,
+        z: center.lat,
+      }
     };
   }
 
   /**
    * Returns active WebGL draw calls and triangle counts.
+   * Reports real measured values without fabricated fallbacks.
    */
   getRenderInfo() {
+    if (!this.renderer || !this._measuredCalls) {
+      return {
+        calls: null,
+        triangles: null,
+        available: false
+      };
+    }
     return {
-      calls: Math.max(1, this._measuredCalls || 48),
-      triangles: Math.max(100, this._measuredTriangles || 38500),
+      calls: this._measuredCalls,
+      triangles: this._measuredTriangles,
+      available: true
+    };
+  }
+
+  /**
+   * Returns true runtime model metadata from active Three.js scene hierarchy.
+   *
+   * @param {number} index - Vehicle fleet index (default: selectedVehicle)
+   * @returns {object|null}
+   */
+  getModelInfo(index = this.selectedVehicle) {
+    const truck = this.fleet?.[index];
+    if (!truck) return null;
+
+    let meshCount = 0;
+    const materialsSet = new Set();
+    truck.traverse(obj => {
+      if (obj.isMesh) {
+        meshCount++;
+        if (obj.material) {
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach(m => materialsSet.add(m.name || m.type || 'unnamed'));
+          } else {
+            materialsSet.add(obj.material.name || obj.material.type || 'unnamed');
+          }
+        }
+      }
+    });
+
+    const THREE_NS = this.three || window.THREE;
+    const box = THREE_NS ? new THREE_NS.Box3().setFromObject(truck) : null;
+    const size = THREE_NS ? new THREE_NS.Vector3() : null;
+    if (box && size) box.getSize(size);
+
+    const s = (truck.scale && truck.scale.x > 0) ? truck.scale.x : 1;
+    const lengthMeters = box && size ? Math.max(size.x, size.z) / s : 0;
+    const widthMeters = box && size ? Math.min(size.x, size.z) / s : 0;
+    const heightMeters = box && size ? size.y / s : 0;
+
+    return {
+      index,
+      name: truck.name,
+      type: truck.userData.type,
+      isGLTF: Boolean(truck.userData.isGLTF),
+      hasGLB: Boolean(truck.userData.hasGLB),
+      modelUrl: truck.userData.modelUrl || null,
+      meshCount,
+      materialCount: materialsSet.size,
+      materials: Array.from(materialsSet),
+      inScene: Boolean(truck.parent === this.scene),
+      bounds: box && size ? {
+        min: { x: box.min.x / s, y: box.min.y / s, z: box.min.z / s },
+        max: { x: box.max.x / s, y: box.max.y / s, z: box.max.z / s },
+        size: {
+          x: size.x / s,
+          y: size.y / s,
+          z: size.z / s,
+          length: lengthMeters,
+          width: widthMeters,
+          height: heightMeters
+        }
+      } : null,
+      dimensionsMeters: {
+        length: lengthMeters,
+        width: widthMeters,
+        height: heightMeters
+      },
+      scale: { x: truck.scale.x, y: truck.scale.y, z: truck.scale.z },
+      rotation: { x: truck.rotation.x, y: truck.rotation.y, z: truck.rotation.z },
+      position: { x: truck.position.x, y: truck.position.y, z: truck.position.z },
+      wheelCount: truck.userData.wheels?.length || 0
     };
   }
 
@@ -1004,6 +1220,17 @@ export class Atlas3DEngine {
         }
       });
       this.scene = null;
+    }
+    if (this._inspectScene) {
+      this._inspectScene.traverse(obj => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+          else obj.material.dispose();
+        }
+      });
+      this._inspectScene = null;
+      this._inspectCamera = null;
     }
     if (this.map) {
       this.map.remove();

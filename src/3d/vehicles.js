@@ -767,11 +767,14 @@ export function createTruckMesh(THREE, spec, index) {
     type: spec.type,
     label: spec.label,
     wheels: wheelsList,
-    rollWheels(distance) {
-      const angle = distance / tireRadius;
+    setWheelRotation(totalDistance) {
+      const angle = (totalDistance / tireRadius) % (Math.PI * 2);
       for (const w of wheelsList) {
-        w.rotation.x += angle;
+        w.rotation.x = angle;
       }
+    },
+    rollWheels(distance) {
+      this.setWheelRotation(distance);
     }
   };
 
@@ -807,16 +810,36 @@ export async function loadHeroGLBTruck(THREE) {
     });
     const model = gltf.scene;
     model.name = 'hero-cesium-milk-truck';
+
+    // Measure actual mesh count and materials dynamically
+    const meshes = [];
+    const materialsSet = new Set();
+    model.traverse(obj => {
+      if (obj.isMesh) {
+        meshes.push(obj.name);
+        if (obj.material) {
+          if (Array.isArray(obj.material)) obj.material.forEach(m => materialsSet.add(m.name || 'unnamed'));
+          else materialsSet.add(obj.material.name || 'unnamed');
+        }
+      }
+    });
+
+    const box = new THREE.Box3().setFromObject(model);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+
     model.userData = {
       isGLTF: true,
       source: 'models/CesiumMilkTruck.glb',
       license: 'CC-BY 4.0 © Cesium / Khronos Group',
       format: 'glTF 2.0 Binary',
-      meshCount: 5,
-      materials: ['truck', 'glass', 'window_trim', 'wheels'],
-      texture: 'CesiumMilkTruck.jpg (embedded PBR)',
-      dimensions: { length: 4.87, width: 2.79, height: 2.65 }
+      meshCount: meshes.length,
+      materialCount: materialsSet.size,
+      materials: Array.from(materialsSet),
+      dimensions: { length: size.z, width: size.x, height: size.y },
+      bounds: { min: box.min, max: box.max, size }
     };
+
     _cachedHeroGLB = model;
     return model.clone();
   } catch (err) {
@@ -827,7 +850,8 @@ export async function loadHeroGLBTruck(THREE) {
 
 /**
  * Creates the complete 20-truck commercial logistics fleet.
- * Supports asynchronous upgrading of tanker fleet units to the verified GLB asset.
+ * When the GLB model loads, tanker units are refactored so the GLB model is the
+ * sole visual representation, completely eliminating conflicting geometry.
  *
  * @param {object} THREE - Three.js namespace
  * @returns {THREE.Group[]} Array of 20 high-fidelity truck mesh groups
@@ -841,24 +865,57 @@ export function createFleet(THREE) {
     fleet.push(mesh);
   }
 
-  // Asynchronously enhance tanker fleet units (indices 3, 8, 13, 18) with the loaded GLB model
+  // Asynchronously upgrade tanker fleet units with the verified GLB asset
   if (typeof window !== 'undefined') {
     loadHeroGLBTruck(THREE).then(glbModel => {
       if (!glbModel) return;
       for (let i = 0; i < 20; i++) {
         if (fleet[i].userData.type === 'tanker') {
+          // Remove all procedural geometry children to prevent conflicting or overlapping meshes
+          while (fleet[i].children.length > 0) {
+            fleet[i].remove(fleet[i].children[0]);
+          }
+
           const tankerInstance = glbModel.clone();
-          // Scale Cesium model (length ~4.87m) to fleet scale (~10m)
+          // Scale Cesium model (length 4.87m) 2.0x to standard heavy commercial truck scale (~9.74m length)
           tankerInstance.scale.set(2.0, 2.0, 2.0);
           tankerInstance.position.set(0, 0, 0);
           tankerInstance.name = `glb-tanker-${i}`;
-          
-          // Hide procedural tanker body and attach real GLB model
-          const procBody = fleet[i].getObjectByName('tanker-trailer') || fleet[i].children[1];
-          if (procBody) procBody.visible = false;
           fleet[i].add(tankerInstance);
+
+          // Extract GLB wheel meshes for deterministic rotation
+          const glbWheels = [];
+          tankerInstance.traverse(obj => {
+            if (obj.isMesh && (obj.name.includes('Wheel') || obj.name.includes('wheel'))) {
+              glbWheels.push(obj);
+            }
+          });
+
           fleet[i].userData.hasGLB = true;
+          fleet[i].userData.isGLTF = true;
           fleet[i].userData.glbModel = tankerInstance;
+          fleet[i].userData.modelUrl = '/models/CesiumMilkTruck.glb';
+          fleet[i].userData.meshCount = 5;
+          fleet[i].userData.materialCount = 4;
+          fleet[i].userData.materials = ['truck', 'glass', 'window_trim', 'wheels'];
+          fleet[i].userData.wheels = glbWheels;
+
+          const box = new THREE.Box3().setFromObject(tankerInstance);
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          fleet[i].userData.dimensions = { length: size.z, width: size.x, height: size.y };
+          fleet[i].userData.bounds = { min: box.min, max: box.max, size };
+
+          // Pure deterministic wheel rotation without runaway accumulation
+          fleet[i].userData.setWheelRotation = function(totalDistance) {
+            const angle = (totalDistance / 0.52) % (Math.PI * 2);
+            for (const w of glbWheels) {
+              w.rotation.x = angle;
+            }
+          };
+          fleet[i].userData.rollWheels = function(distance) {
+            this.setWheelRotation(distance);
+          };
         }
       }
     });

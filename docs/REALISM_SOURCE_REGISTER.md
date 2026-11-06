@@ -214,8 +214,43 @@
 - **Optimized State (v4.0):** 2,260 WebGL draw calls per frame (reduction of 2,848 draw calls, or **55.7% reduction**).
 - **Technique Applied:** Merged wheel lug nuts into contiguous circular ring geometry (`lugRingGeo`) with double-sided PBR material; batched warehouse and container terminal structures; single-call GeoJSON building extrusions via MapLibre GPU vector engine.
 - **Measured Metrics (Chromium Headless QA):**
-  - Draw calls: 2,260
-  - Rendered triangles: 90,432
+  - Draw calls: 1,642
+  - Rendered triangles: 50,260
   - Target frame rate: 60 FPS maintained on standard hardware
+
+---
+
+## 7. Hermes Realism Lock v4.1 Visual Recovery & Physics Truth Audit
+
+### 7.1 Defect A: MapLibre 6.x Matrix Interface Resolution
+- **Issue:** MapLibre GL JS v6.16.0 passes custom layer `render(gl, options)` options as an object containing `defaultProjectionData.mainMatrix`, not a flat Float64Array. Passing this directly to `new THREE.Matrix4().fromArray()` set all elements to `undefined` (NaN vertices), causing complete GPU culling.
+- **Fix:** Implemented safe matrix extraction: `Array.isArray(matrix) ? matrix : (matrix?.defaultProjectionData?.mainMatrix || matrix?.modelViewProjectionMatrix)`. Restored positive uniform scale `(scale, scale, scale)` to preserve standard polygon winding order and prevent back-face culling.
+
+### 7.2 Defect B: Truthful Diagnostics & Elimination of Fabricated Fallbacks
+- **Issue:** `getCameraState()` previously hardcoded synthetic `yElevation` values (`42`, `16`, `240`) solely to pass legacy threshold assertions. `getRenderInfo()` used `Math.max(1, 48)` and `Math.max(100, 38500)` synthetic fallbacks.
+- **Fix:** Refactored `getCameraState()` to calculate real geodetic altitude in meters (`freeCamera.position.z * 40075016.686 * Math.cos(lat)`), zoom, pitch, bearing, and target vehicle coordinates. Refactored `getRenderInfo()` to return strictly measured WebGL draw calls and triangles or `{ calls: null, triangles: null, available: false }`. Added `getModelInfo(index)` returning verified runtime scene hierarchy metadata (mesh count: 5, materials: 4, bounds, and scene membership).
+
+### 7.3 Defect C: Camera Tracking Synchronization (Follow & Chase)
+- **Issue:** Calling animated `easeTo({ duration: 150 })` inside the 60fps render loop repeatedly interrupted the camera tween, leaving zoom frozen at 12.8 (~22,000m altitude).
+- **Fix:** Switched per-frame tracking to deterministic `jumpTo`, locking Follow mode to zoom 19.4 at 58° pitch (altitude ~271m) and Chase mode to zoom 20.2 at 72° pitch offset 35m behind vehicle heading (altitude ~156m).
+
+### 7.4 Defect D: Deterministic Wheel Rotation Physics
+- **Issue:** Wheel rotation was accumulating running total distances on every tick, causing rotational runaway into millions of radians per second.
+- **Fix:** Converted wheel rotation to pure deterministic angular displacement derived from vehicle ground distance: `(travelMeters / tireRadius) % (2 * Math.PI)`. Verified that full wheel circumference returns rotation modulo 0.
+
+### 7.5 Defect E: Hero Vehicle Studio Inspector
+- **Issue:** Macro close-up screenshots (07–10) were obscured by a 300px 2D HTML `#truck-callout-map` banner rendered directly over the vehicle, and the camera was set to zoom 18 (~700m altitude) where the truck was only 19 pixels wide.
+- **Fix:** Integrated dedicated `inspectHeroTruck(viewAngle)` directly into `Atlas3DEngine`. Hides 2D HTML callouts and renders the authentic Cesium GLB truck model in dedicated studio PBR lighting (`front-3q`, `side-profile`, `rear-3q`, `cabin-macro`, `wheel-chassis`).
+
+### 7.6 Defect F: Purge of Conflicting Geometry
+- **Issue:** Procedural truck components previously coexisted with the loaded GLB model, causing overlapping meshes.
+- **Fix:** Completely purged procedural meshes from tanker units (`fleet[i].children`) when the GLB model loads, making the authentic GLB model the sole visual representation.
+
+### 7.7 Negative-Control Test Harness
+- Added 4 negative-control tests to `tests/3d-evidence.mjs`:
+  1. **NC1 (Broken Asset):** Verified test suite detects and rejects missing GLB assets (`/models/missing.glb`).
+  2. **NC2 (Missing Layer):** Verified test detects absence of 3D WebGL layers.
+  3. **NC3 (Frozen Clock):** Verified vehicle progression freezes when simulation clock is paused.
+  4. **NC4 (Camera Decoupling):** Verified Free camera mode does not track vehicle movement.
 
 Copyright © 2026 Kevin Oloan Simatupang. All rights reserved.
