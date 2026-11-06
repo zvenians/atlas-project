@@ -16,6 +16,12 @@ export function createSimulation({ seed = 77, vehicles = [], tickMs = 1000 } = {
   let rng = seed >>> 0;
   const nextRandom = () => { rng = (Math.imul(1664525, rng) + 1013904223) >>> 0; return rng / 4294967296; };
   const snapshot = () => structuredClone(state);
+  const subscribers = new Set();
+  const publish = () => {
+    const current = snapshot();
+    for (const listener of subscribers) listener(structuredClone(current));
+    return current;
+  };
 
   const step = () => {
     state.tick++;
@@ -52,22 +58,34 @@ export function createSimulation({ seed = 77, vehicles = [], tickMs = 1000 } = {
       speedMultiplier: state.speedMultiplier
     });
 
-    return snapshot();
+    return publish();
   };
 
   return {
     snapshot,
-    play() { state.status = 'RUNNING'; return snapshot(); },
-    pause() { state.status = 'PAUSED'; return snapshot(); },
+    getSnapshot: snapshot,
+    subscribe(listener) {
+      if (typeof listener !== 'function') throw new TypeError('Subscriber must be a function');
+      subscribers.add(listener);
+      return () => subscribers.delete(listener);
+    },
+    play() { state.status = 'RUNNING'; return publish(); },
+    pause() { state.status = 'PAUSED'; return publish(); },
     step,
     advance() { return state.status === 'RUNNING' ? step() : snapshot(); },
     setSpeed(multiplier) {
-      state.speedMultiplier = Number(multiplier) || 1;
-      return snapshot();
+      const speed = Number(multiplier);
+      if (![1, 2, 4].includes(speed)) throw new RangeError('Allowed speeds: 1x, 2x, 4x');
+      state.speedMultiplier = speed;
+      return publish();
     },
     setScenario(scenarioCode) {
-      state.scenario = scenarioCode || 'NORMAL_DELIVERY';
-      return snapshot();
+      const scenario = scenarioCode || 'NORMAL_DELIVERY';
+      if (!['NORMAL_DELIVERY', 'TRAFFIC_DELAY', 'VEHICLE_STOP', 'SIGNAL_LOSS', 'ROUTE_DEVIATION'].includes(scenario)) {
+        throw new RangeError('Unsupported demo scenario');
+      }
+      state.scenario = scenario;
+      return publish();
     },
     reset() {
       rng = seed >>> 0;
@@ -81,7 +99,7 @@ export function createSimulation({ seed = 77, vehicles = [], tickMs = 1000 } = {
         vehicles: structuredClone(vehicles),
         events: []
       };
-      return snapshot();
+      return publish();
     }
   };
 }
