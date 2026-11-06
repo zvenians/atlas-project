@@ -35,6 +35,9 @@ export function setup3DCanvases(controllersMap) {
       controllersMap.set('atlas-3d-canvas-full', c3);
       window.__atlas3DSetCamMode = (m) => c3.setCameraMode?.(m);
       window.__atlas3DResetOrbit = () => c3.resetCamera?.();
+      window.__atlas3DGetCameraState = () => c3.getCameraState?.();
+      window.__atlas3DGetRenderInfo = () => c3.getRenderInfo?.();
+      window.__atlas3DGetVehicleProgress = (i) => c3.getVehicleProgress?.(i);
     }
   }
 

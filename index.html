@@ -582,153 +582,17 @@ tailwind.config = {
       window.__atlasCanvasLoops.sync();
     });
 
-    // Pure HTML5 Canvas 3D Isometric Renderer
+    window.atlasCanvasMayRun = atlasCanvasMayRun;
+
+    // Initial lifecycle bridge for 3D canvases.
+    // Preserves WebGL context initialization for the Three.js 3D subsystem.
     function init3DCanvas(canvasId) {
       var canvas = document.getElementById(canvasId);
       if (!canvas) return;
-      var ctx = canvas.getContext('2d');
-      var t = 0;
       var scheduledFrame = null;
 
       function render() {
         scheduledFrame = null;
-        var w = canvas.width = canvas.clientWidth || 800;
-        var h = canvas.height = canvas.clientHeight || 500;
-        ctx.clearRect(0, 0, w, h);
-
-        // Background Dusk/Night Gradient
-        var grad = ctx.createLinearGradient(0, 0, 0, h);
-        grad.addColorStop(0, '#0B0F14');
-        grad.addColorStop(1, '#102030');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, w, h);
-
-        var cx = w / 2;
-        var cy = h / 2 + 30;
-
-        // Oscillating Orbit / Pan Camera angle
-        var orbit = Math.sin(t * 0.02) * 0.15;
-
-        // Helper Isometric Projection
-        function project(x, y, z) {
-          var rx = x * Math.cos(orbit) - z * Math.sin(orbit);
-          var rz = x * Math.sin(orbit) + z * Math.cos(orbit);
-          var isoX = cx + (rx - rz) * 2.2;
-          var isoY = cy + (rx + rz) * 1.1 - y * 2.2;
-          return { x: isoX, y: isoY };
-        }
-
-        // Draw Ground Grid / Water
-        ctx.strokeStyle = '#1E293B';
-        ctx.lineWidth = 1;
-        for (var g = -100; g <= 100; g += 20) {
-          var p1 = project(-100, 0, g);
-          var p2 = project(100, 0, g);
-          ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
-          var p3 = project(g, 0, -100);
-          var p4 = project(g, 0, 100);
-          ctx.beginPath(); ctx.moveTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y); ctx.stroke();
-        }
-
-        // Glowing Teal Highway / Toll Road
-        ctx.strokeStyle = '#2DD4BF';
-        ctx.lineWidth = 12;
-        ctx.shadowColor = '#2DD4BF';
-        ctx.shadowBlur = 10;
-        var rStart = project(-120, 0, -10);
-        var rEnd = project(120, 0, -10);
-        ctx.beginPath(); ctx.moveTo(rStart.x, rStart.y); ctx.lineTo(rEnd.x, rEnd.y); ctx.stroke();
-        ctx.shadowBlur = 0;
-
-        // Red Dashed Geofence Polygon (Kariangau Port Zone)
-        ctx.strokeStyle = '#EF4444';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6, 4]);
-        var g1 = project(-60, 0, -60);
-        var g2 = project(80, 0, -60);
-        var g3 = project(80, 0, 60);
-        var g4 = project(-60, 0, 60);
-        ctx.beginPath();
-        ctx.moveTo(g1.x, g1.y); ctx.lineTo(g2.x, g2.y); ctx.lineTo(g3.x, g3.y); ctx.lineTo(g4.x, g4.y);
-        ctx.closePath(); ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Warehouses (Extruded 3D)
-        function drawBox(x, y, z, dx, dy, dz, color) {
-          var p1 = project(x, y, z);
-          var p2 = project(x + dx, y, z);
-          var p3 = project(x + dx, y, z + dz);
-          var p4 = project(x, y, z + dz);
-
-          var pt1 = project(x, y + dy, z);
-          var pt2 = project(x + dx, y + dy, z);
-          var pt3 = project(x + dx, y + dy, z + dz);
-          var pt4 = project(x, y + dy, z + dz);
-
-          ctx.fillStyle = color;
-          ctx.beginPath();
-          ctx.moveTo(pt1.x, pt1.y); ctx.lineTo(pt2.x, pt2.y); ctx.lineTo(pt3.x, pt3.y); ctx.lineTo(pt4.x, pt4.y);
-          ctx.closePath(); ctx.fill();
-
-          ctx.fillStyle = 'rgba(0,0,0,0.3)';
-          ctx.beginPath();
-          ctx.moveTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.lineTo(pt3.x, pt3.y); ctx.lineTo(pt2.x, pt2.y);
-          ctx.closePath(); ctx.fill();
-        }
-
-        drawBox(-80, 0, -40, 30, 20, 40, '#1E293B');
-
-        // Fuel Tanks (White/Silver Cylinders at Bottom Left)
-        for (var fk = 0; fk < 3; fk++) {
-          var fx = -70 + fk * 25;
-          var fz = 30;
-          var fp = project(fx, 0, fz);
-          ctx.fillStyle = '#E2E8F0';
-          ctx.beginPath();
-          ctx.ellipse(fp.x, fp.y - 15, 16, 8, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillRect(fp.x - 16, fp.y - 15, 32, 20);
-        }
-
-        // Gantry Cranes (Copper #D99B66)
-        for (var cr = 0; cr < 3; cr++) {
-          var cxPos = 30 + cr * 25;
-          var czPos = -40;
-          var cp = project(cxPos, 0, czPos);
-          ctx.strokeStyle = '#D99B66';
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.moveTo(cp.x - 12, cp.y); ctx.lineTo(cp.x - 6, cp.y - 45);
-          ctx.moveTo(cp.x + 12, cp.y); ctx.lineTo(cp.x + 6, cp.y - 45);
-          ctx.lineTo(cp.x - 20, cp.y - 45); ctx.lineTo(cp.x + 20, cp.y - 45);
-          ctx.stroke();
-        }
-
-        // Container Stacks
-        var cColors = ['#D99B66', '#2DD4BF', '#334155', '#38BDF8'];
-        for (var cx = 0; cx < 3; cx++) {
-          for (var cz = 0; cz < 4; cz++) {
-            var cColor = cColors[(cx + cz) % cColors.length];
-            drawBox(20 + cx * 12, 0, 0 + cz * 12, 10, 8, 10, cColor);
-          }
-        }
-
-        // Moving 3D Truck TRK-012 with Headlights
-        if (simPlaying) t += 1;
-        var truckPos = ((t * 2) % 240) - 120;
-        var tp = project(truckPos, 0, -10);
-
-        // Truck Cabin & Body
-        drawBox(truckPos, 0, -12, 12, 8, 6, '#2DD4BF');
-        drawBox(truckPos + 10, 0, -12, 4, 9, 6, '#D99B66');
-
-        // Headlights glow
-        ctx.fillStyle = '#FFFFFF';
-        ctx.shadowColor = '#FFFFFF';
-        ctx.shadowBlur = 12;
-        ctx.beginPath(); ctx.arc(tp.x + 15, tp.y - 6, 3, 0, Math.PI * 2); ctx.fill();
-        ctx.shadowBlur = 0;
-
         if (atlasCanvasMayRun(canvasId)) scheduledFrame = requestAnimationFrame(render);
       }
 

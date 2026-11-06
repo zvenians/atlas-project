@@ -299,7 +299,9 @@ export function initLiveMap3D(canvas, THREE) {
 
   // --- 20 Fleet Vehicles (Articulated 3D Trucks) ---
   const vehicleRoutes = assignVehicleRoutes(20);
-  const vehicleProgress = vehicleRoutes.map(vr => vr.progress);
+  const initialProgress = vehicleRoutes.map(vr => vr.progress);
+  const vehicleProgress = [...initialProgress];
+  let lastTick = -1;
   const vehicleMeshes = [];
   const truckHitboxes = [];
 
@@ -468,14 +470,29 @@ export function initLiveMap3D(canvas, THREE) {
     camMode = mode;
     syncCameraButtonsUI(mode);
 
+    const selMesh = vehicleMeshes[selectedVehicleIndex];
+    const truckPos = selMesh ? selMesh.position : new THREE.Vector3(0, 0, 0);
+    const truckRot = selMesh ? selMesh.rotation.y : 0;
+
     if (mode === 'overview') {
-      orbitTarget.set(0, 0, 10);
+      orbitTarget.set(0, 0, 0);
       orbitSpherical.radius = 280;
       orbitSpherical.phi = Math.PI / 4.5;
       orbitSpherical.theta = -0.15;
-      updateFreeCameraFromOrbit();
-      camMode = 'free';
-      syncCameraButtonsUI('free');
+      camera.position.set(0, 240, 180);
+      camera.lookAt(0, 0, 0);
+    } else if (mode === 'follow') {
+      const targetCamX = truckPos.x + 35 * Math.sin(truckRot - Math.PI / 2);
+      const targetCamZ = truckPos.z + 45 * Math.cos(truckRot - Math.PI / 2);
+      camera.position.set(targetCamX, 42, targetCamZ);
+      camera.lookAt(truckPos.x, truckPos.y + 4, truckPos.z);
+    } else if (mode === 'chase') {
+      const chaseDist = 28;
+      const chaseHeight = 14;
+      const targetCamX = truckPos.x - chaseDist * Math.sin(truckRot + Math.PI / 2);
+      const targetCamZ = truckPos.z - chaseDist * Math.cos(truckRot + Math.PI / 2);
+      camera.position.set(targetCamX, chaseHeight, targetCamZ);
+      camera.lookAt(truckPos.x, truckPos.y + 3, truckPos.z);
     } else if (mode === 'free') {
       updateFreeCameraFromOrbit();
     }
@@ -511,25 +528,45 @@ export function initLiveMap3D(canvas, THREE) {
 
     // Read canonical simulation state
     const sim = window.ATLAS_V21?.sim;
-    const simState = sim ? sim.getSnapshot() : { status: 'RUNNING', speedMultiplier: 1 };
+    const simState = sim ? sim.getSnapshot() : { status: 'RUNNING', speedMultiplier: 1, tick: 0, scenario: 'NORMAL_DELIVERY' };
     const isRunning = simState.status === 'RUNNING';
     const speedMult = simState.speedMultiplier || 1;
+    const currentTick = simState.tick || 0;
+    const scenario = simState.scenario || 'NORMAL_DELIVERY';
 
-    // Animate all 20 vehicles along geographic routes
-    const speedDelta = isRunning ? 0.0006 * speedMult : 0;
+    // Synchronize tick state changes
+    if (currentTick !== lastTick) {
+      if (currentTick === 0) {
+        for (let i = 0; i < 20; i++) {
+          vehicleProgress[i] = initialProgress[i];
+        }
+      } else if (!isRunning) {
+        // Discrete manual step advance
+        const stepRate = scenario === 'VEHICLE_STOP' ? 0 : (scenario === 'TRAFFIC_DELAY' ? 0.004 : 0.008);
+        for (let i = 0; i < 20; i++) {
+          vehicleProgress[i] = (vehicleProgress[i] + stepRate * speedMult * (0.85 + (i % 4) * 0.1)) % 1.0;
+        }
+      }
+      lastTick = currentTick;
+    }
 
-    for (let i = 0; i < 20; i++) {
-      const vr = vehicleRoutes[i];
-      if (isRunning) {
+    // Continuous motion when simulation is actively running
+    if (isRunning && scenario !== 'VEHICLE_STOP') {
+      const scenarioFactor = scenario === 'TRAFFIC_DELAY' ? 0.5 : 1.0;
+      const speedDelta = 0.0006 * speedMult * scenarioFactor;
+      for (let i = 0; i < 20; i++) {
         vehicleProgress[i] = (vehicleProgress[i] + speedDelta * (0.85 + (i % 4) * 0.1)) % 1.0;
       }
+    }
 
+    // Position each vehicle along its geographic route
+    for (let i = 0; i < 20; i++) {
+      const vr = vehicleRoutes[i];
       const geoPos = interpolateRoute(vr.waypoints, vehicleProgress[i]);
       const p3 = geoTo3D(geoPos.lng, geoPos.lat);
       const mesh = vehicleMeshes[i];
 
       mesh.position.set(p3.x, 0.4, p3.z);
-      // Align truck rotation with road heading
       mesh.rotation.y = (-geoPos.bearing * Math.PI) / 180 + Math.PI / 2;
     }
 
@@ -541,29 +578,28 @@ export function initLiveMap3D(canvas, THREE) {
 
     // --- Dynamic Camera Tracking ---
     if (selMesh) {
-      const selVr = vehicleRoutes[selectedVehicleIndex];
-      const selGeo = interpolateRoute(selVr.waypoints, vehicleProgress[selectedVehicleIndex]);
       const truckPos = selMesh.position;
       const truckRot = selMesh.rotation.y;
 
       if (camMode === 'follow') {
-        // Smoothly track selected vehicle from elevated angle
         const targetCamX = truckPos.x + 35 * Math.sin(truckRot - Math.PI / 2);
         const targetCamZ = truckPos.z + 45 * Math.cos(truckRot - Math.PI / 2);
-        camera.position.x += (targetCamX - camera.position.x) * 0.08;
-        camera.position.y += (42 - camera.position.y) * 0.08;
-        camera.position.z += (targetCamZ - camera.position.z) * 0.08;
+        camera.position.x += (targetCamX - camera.position.x) * 0.1;
+        camera.position.y += (42 - camera.position.y) * 0.1;
+        camera.position.z += (targetCamZ - camera.position.z) * 0.1;
         camera.lookAt(truckPos.x, truckPos.y + 4, truckPos.z);
       } else if (camMode === 'chase') {
-        // Behind-vehicle chase cam
         const chaseDist = 28;
         const chaseHeight = 14;
         const targetCamX = truckPos.x - chaseDist * Math.sin(truckRot + Math.PI / 2);
         const targetCamZ = truckPos.z - chaseDist * Math.cos(truckRot + Math.PI / 2);
-        camera.position.x += (targetCamX - camera.position.x) * 0.12;
-        camera.position.y += (chaseHeight - camera.position.y) * 0.12;
-        camera.position.z += (targetCamZ - camera.position.z) * 0.12;
+        camera.position.x += (targetCamX - camera.position.x) * 0.15;
+        camera.position.y += (chaseHeight - camera.position.y) * 0.15;
+        camera.position.z += (targetCamZ - camera.position.z) * 0.15;
         camera.lookAt(truckPos.x, truckPos.y + 3, truckPos.z);
+      } else if (camMode === 'overview') {
+        camera.position.set(0, 240, 180);
+        camera.lookAt(0, 0, 0);
       }
     }
 
@@ -608,6 +644,24 @@ export function initLiveMap3D(canvas, THREE) {
     setCameraMode,
     resetCamera,
     selectVehicle,
+    getCameraState() {
+      return {
+        mode: camMode,
+        position: { x: Number(camera.position.x.toFixed(2)), y: Number(camera.position.y.toFixed(2)), z: Number(camera.position.z.toFixed(2)) },
+        target: { x: Number(orbitTarget.x.toFixed(2)), y: Number(orbitTarget.y.toFixed(2)), z: Number(orbitTarget.z.toFixed(2)) },
+        selectedVehicle: selectedVehicleIndex
+      };
+    },
+    getRenderInfo() {
+      return {
+        calls: renderer.info.render.calls,
+        triangles: renderer.info.render.triangles,
+        frame: renderer.info.render.frame
+      };
+    },
+    getVehicleProgress(index) {
+      return vehicleProgress[index ?? selectedVehicleIndex];
+    },
     dispose() {
       controller.stop();
       if (renderer) renderer.dispose();

@@ -265,12 +265,19 @@ export function initLanding3DScene(canvas, THREE) {
     camera.position.y = 95 + Math.sin(t * 0.08) * 15;
     camera.lookAt(0, 5, 0);
 
-    // Animate trucks along highway
-    for (const trk of trucks) {
-      trk.pos += trk.speed;
-      if (trk.pos > 250) trk.pos = -250;
-      trk.mesh.position.set(trk.pos, 0.4, trk.lane);
-      trk.mesh.rotation.y = Math.PI / 2; // Face positive X along road
+    // Animate trucks along highway synchronized with simulation state
+    const sim = window.ATLAS_V21?.sim;
+    const simState = sim ? sim.getSnapshot() : { status: 'RUNNING', speedMultiplier: 1 };
+    const isRunning = simState.status === 'RUNNING';
+    const speedMult = simState.speedMultiplier || 1;
+
+    if (isRunning) {
+      for (const trk of trucks) {
+        trk.pos += trk.speed * speedMult;
+        if (trk.pos > 250) trk.pos = -250;
+        trk.mesh.position.set(trk.pos, 0.4, trk.lane);
+        trk.mesh.rotation.y = Math.PI / 2; // Face positive X along road
+      }
     }
 
     // Resize viewport dynamically
@@ -306,6 +313,12 @@ export function initLanding3DScene(canvas, THREE) {
     },
     isRunning() {
       return scheduledFrame !== null;
+    },
+    getRenderInfo() {
+      return {
+        calls: renderer ? renderer.info.render.calls : 0,
+        triangles: renderer ? renderer.info.render.triangles : 0
+      };
     },
     dispose() {
       controller.stop();
@@ -413,13 +426,20 @@ export function initOverview3DScene(canvas, THREE) {
   function render() {
     scheduledFrame = null;
 
-    // Rotate trucks around hub paths
-    for (const t of miniTrucks) {
-      t.angle += t.speed;
-      const x = Math.cos(t.angle) * t.radius;
-      const z = Math.sin(t.angle) * t.radius;
-      t.mesh.position.set(x, 0.4, z);
-      t.mesh.rotation.y = -t.angle; // Tangent to circle
+    // Rotate trucks around hub paths synchronized with simulation state
+    const sim = window.ATLAS_V21?.sim;
+    const simState = sim ? sim.getSnapshot() : { status: 'RUNNING', speedMultiplier: 1 };
+    const isRunning = simState.status === 'RUNNING';
+    const speedMult = simState.speedMultiplier || 1;
+
+    if (isRunning) {
+      for (const t of miniTrucks) {
+        t.angle += t.speed * speedMult;
+        const x = Math.cos(t.angle) * t.radius;
+        const z = Math.sin(t.angle) * t.radius;
+        t.mesh.position.set(x, 0.4, z);
+        t.mesh.rotation.y = -t.angle; // Tangent to circle
+      }
     }
 
     const width = canvas.clientWidth || 400;
@@ -454,6 +474,12 @@ export function initOverview3DScene(canvas, THREE) {
     },
     isRunning() {
       return scheduledFrame !== null;
+    },
+    getRenderInfo() {
+      return {
+        calls: renderer ? renderer.info.render.calls : 0,
+        triangles: renderer ? renderer.info.render.triangles : 0
+      };
     },
     dispose() {
       controller.stop();
