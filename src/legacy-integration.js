@@ -332,16 +332,28 @@ window.addEventListener('hashchange', syncLegacyMapAnimations);
 document.addEventListener('visibilitychange', syncLegacyMapAnimations);
 
 // Browser-local prototype clock; persistent server sandbox is a later stage.
-const intervalId = window.setInterval(() => {
-  if (!document.hidden && sim.getSnapshot().status === 'RUNNING') {
-    sim.advance();
+let intervalId = null;
+function startLocalSimulationTicker() {
+  if (intervalId !== null) return;
+  intervalId = window.setInterval(() => {
+    if (!document.hidden && sim.getSnapshot().status === 'RUNNING') {
+      sim.advance();
+    }
+  }, 1000);
+}
+function stopLocalSimulationTicker() {
+  if (intervalId !== null) {
+    window.clearInterval(intervalId);
+    intervalId = null;
   }
-}, 1000);
+}
+startLocalSimulationTicker();
+window.addEventListener('pageshow', startLocalSimulationTicker);
 window.addEventListener('pagehide', () => {
-  window.clearInterval(intervalId);
+  stopLocalSimulationTicker();
   const mapSvg = $('#svg-map');
   if (mapSvg && typeof mapSvg.pauseAnimations === 'function') mapSvg.pauseAnimations();
-}, { once: true });
+});
 
 document.addEventListener('click', (e) => {
   const pole = e.target.closest('[data-veh-id]');

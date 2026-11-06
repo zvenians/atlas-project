@@ -63,4 +63,8 @@ test('B-P0-04: canvas animation loops and legacy timers gate on visibility and c
     'legacy bridge must not overwrite the authoritative canvas controller');
   assert.match(html, /visibilitychange/, 'canvas loops must pause when document is hidden');
   assert.match(bridge, /pauseAnimations/, 'legacy SVG SMIL animations must pause when legacy map is hidden');
+  assert.match(bridge, /pageshow.*startLocalSimulationTicker/,
+    'simulation ticker must resume when restored from bfcache');
+  assert.match(bridge, /stopLocalSimulationTicker\(\)/,
+    'pagehide must stop simulation ticker without leaking intervals');
   });
