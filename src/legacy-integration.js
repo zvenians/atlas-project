@@ -403,14 +403,33 @@ function initPrimaryControlsBridge() {
   window.setCamMode = function setCamMode(mode) {
     for (const m of ['free', 'follow', 'chase']) {
       const node = document.getElementById('cam-' + m);
-      if (node) node.style.color = '#94A3B8';
+      if (node) {
+        node.style.color = (m === mode) ? '#2DD4BF' : '#94A3B8';
+        if (m === mode) {
+          node.className = 'text-tealAccent font-bold px-2 py-0.5 rounded';
+          node.style.background = 'rgba(45,212,191,0.1)';
+          node.style.border = '1px solid rgba(45,212,191,0.3)';
+        } else {
+          node.className = '';
+          node.style.background = 'none';
+          node.style.border = 'none';
+        }
+      }
     }
-    const el = document.getElementById('cam-' + mode);
-    if (el) el.style.color = '#2DD4BF';
-    if (typeof window.atlasLegacyNotice === 'function') window.atlasLegacyNotice('Camera mode ' + mode + ' is not implemented in 2D prototype.');
+    if (typeof window.__atlas3DSetCamMode === 'function') {
+      window.__atlas3DSetCamMode(mode);
+    }
+    if (typeof window.atlasLegacyNotice === 'function') {
+      window.atlasLegacyNotice('3D Camera mode: ' + mode.toUpperCase() + ' (active: TRK-012)');
+    }
   };
   window.resetOrbit = function resetOrbit() {
-    if (typeof window.atlasLegacyNotice === 'function') window.atlasLegacyNotice('Orbit reset is not implemented in 2D prototype.');
+    if (typeof window.__atlas3DResetOrbit === 'function') {
+      window.__atlas3DResetOrbit();
+    }
+    if (typeof window.atlasLegacyNotice === 'function') {
+      window.atlasLegacyNotice('3D Orbit reset to default tactical perspective.');
+    }
   };
   window.toggleSimPlay = function toggleSimPlay() {
     const next = window.ATLAS_V21.sim.snapshot().status === 'RUNNING' ? window.ATLAS_V21.sim.pause() : window.ATLAS_V21.sim.play();

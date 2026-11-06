@@ -80,6 +80,7 @@
   </style>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/src/vendor/maplibre-gl.css">
 <script>
 tailwind.config = {
   theme: {
@@ -755,8 +756,10 @@ tailwind.config = {
     init3DCanvas('atlas-3d-canvas');
     init3DCanvas('atlas-3d-canvas-mini');
     init3DCanvas('atlas-3d-canvas-full');
+    window.__atlasCanvasControllers = atlasCanvasControllers;
     window.__atlasCanvasLoops.sync();
   </script>
+  <script type="module" src="/src/3d/bootstrap.js"></script>
 
 <section id="atlas-legacy-workspace" class="bg-obsidian min-h-screen flex flex-col justify-between text-slate-200 hidden" hidden aria-label="Legacy operations prototype">
 

@@ -1,9 +1,9 @@
-name: ATLAS P0 quality gate
+name: ATLAS quality gate
 on:
   push:
-    branches: ['fix/atlas-p0-stabilization']
+    branches: ['fix/atlas-p0-stabilization', 'feat/atlas-true-3d-visual-upgrade']
   pull_request:
-    branches: ['main']
+    branches: ['main', 'fix/atlas-p0-stabilization']
 permissions:
   contents: read
 jobs:
@@ -38,11 +38,15 @@ jobs:
         run: node tests/browser-smoke.mjs
       - name: Capture responsive QA screenshots and legacy workflows
         run: node tests/qa-evidence.mjs
+      - name: Capture True 3D visual evidence and camera tracking
+        run: node tests/3d-evidence.mjs
       - name: Upload visual QA evidence (not design approval)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: atlas-p0-qa-${{ github.run_id }}
-          path: artifacts/p0-browser/
+          name: atlas-qa-${{ github.run_id }}
+          path: |
+            artifacts/p0-browser/
+            artifacts/3d-qa/
           retention-days: 7
           if-no-files-found: warn
