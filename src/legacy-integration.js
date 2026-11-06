@@ -374,12 +374,6 @@ function initPrimaryControlsBridge() {
     }
     return null;
   };
-  let rafId = null;
-  window.__atlasCanvasLoops = {
-    sync() { if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; } },
-    stopAll() { if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; } },
-    getActiveLoopCount() { return getActivePrimaryViewId() ? 1 : 0; }
-  };
   window.syncPrimarySimUI = (snap) => {
     if (!snap) return;
     window.simPlaying = snap.status === 'RUNNING';

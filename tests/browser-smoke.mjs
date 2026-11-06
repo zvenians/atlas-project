@@ -33,14 +33,31 @@ try {
       await page.goto('http://'+'127.0.0.1:'+port+'/',{waitUntil:'domcontentloaded'});
       await page.waitForFunction(()=>Boolean(window.ATLAS_V21?.sim && window.__atlasCanvasLoops),{timeout:15000});
       assert.equal(await page.locator('#atlas-legacy-workspace').isVisible(),false,'legacy hidden at root');
-      assert.equal(await page.evaluate(()=>window.__atlasCanvasLoops.getActiveLoopCount()),1,'only landing canvas loop active');
+      await page.waitForFunction(()=>window.__atlasCanvasLoops.getActiveLoopCount()===1);
+      assert.deepEqual(await page.evaluate(()=>window.__atlasCanvasLoops.getStats().active),['atlas-3d-canvas'],
+        'landing is the only actual scheduled canvas');
       await page.evaluate(()=>window.switchView('overview'));
       assert.equal(await page.locator('#view-overview').isVisible(),true,'overview visible');
-      assert.equal(await page.evaluate(()=>window.__atlasCanvasLoops.getActiveLoopCount()),1,'only overview canvas loop active');
+      assert.deepEqual(await page.evaluate(()=>window.__atlasCanvasLoops.getStats().active),['atlas-3d-canvas-mini'],
+        'overview alone owns the scheduled frame');
       await page.evaluate(()=>window.switchView('map'));
       assert.equal(await page.locator('#view-map').isVisible(),true,'map visible');
-      assert.equal(await page.evaluate(()=>window.__atlasCanvasLoops.getActiveLoopCount()),1,'only map canvas loop active');
+      assert.deepEqual(await page.evaluate(()=>window.__atlasCanvasLoops.getStats().active),['atlas-3d-canvas-full'],
+        'map alone owns the scheduled frame');
 
+      // Actual RAF lifecycle, not a synthetic active-view counter.
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.waitForFunction(()=>window.__atlasCanvasLoops.getActiveLoopCount()===0);
+      assert.equal(await page.evaluate(()=>window.__atlasCanvasLoops.getStats().reducedMotion),true);
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+      await page.waitForFunction(()=>window.__atlasCanvasLoops.getActiveLoopCount()===1);
+      assert.deepEqual(await page.evaluate(()=>window.__atlasCanvasLoops.getStats().active),
+        ['atlas-3d-canvas-full'],'map loop resumes after reduced-motion toggles off');
+      await page.evaluate(()=>window.dispatchEvent(new Event('pagehide')));
+      assert.equal(await page.evaluate(()=>window.__atlasCanvasLoops.getActiveLoopCount()),0,
+        'pagehide cancels pending frames');
+      await page.evaluate(()=>window.dispatchEvent(new Event('pageshow')));
+      await page.waitForFunction(()=>window.__atlasCanvasLoops.getActiveLoopCount()===1);
       await page.evaluate(()=>window.setCamMode('chase'));
       assert.match(await page.locator('#atlas-legacy-notice').innerText(),/not implemented/i,'camera mode discloses prototype limitation');
       await page.evaluate(()=>window.resetOrbit());

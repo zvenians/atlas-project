@@ -479,6 +479,7 @@ tailwind.config = {
       document.getElementById('view-map').classList.add('hidden');
       var target = document.getElementById('view-' + v);
       if (target) target.classList.remove('hidden');
+      window.__atlasCanvasLoops?.sync();
       window.scrollTo(0,0);
     }
 
@@ -521,19 +522,64 @@ tailwind.config = {
       }
     }
 
-    function setCamMode(mode) {
-      document.getElementById('cam-free').style.color = '#94A3B8';
-      document.getElementById('cam-follow').style.color = '#94A3B8';
-      document.getElementById('cam-chase').style.color = '#94A3B8';
-      var el = document.getElementById('cam-' + mode);
-      if (el) el.style.color = '#2DD4BF';
+    // Shared lifecycle for the three procedural preview canvases.
+    // Only the visible screen owns an animation frame; no map redesign in P0.
+    const atlasCanvasView = Object.freeze({
+      'atlas-3d-canvas': 'view-landing',
+      'atlas-3d-canvas-mini': 'view-overview',
+      'atlas-3d-canvas-full': 'view-map'
+    });
+    const atlasCanvasControllers = new Map();
+    const atlasMotionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let atlasPageHidden = false;
+
+    function atlasCanvasMayRun(id) {
+      const view = document.getElementById(atlasCanvasView[id]);
+      return Boolean(view && !view.hidden && !view.classList.contains('hidden') &&
+        location.hash !== '#legacy' && !document.hidden && !atlasPageHidden &&
+        !atlasMotionPreference.matches);
     }
-    function resetOrbit() {}
-    function toggleSimPlay() {
-      simPlaying = !simPlaying;
-      document.getElementById('sim-play-btn').innerText = simPlaying ? '⏸' : '▶';
-    }
-    function resetSim() { simPlaying = true; document.getElementById('sim-play-btn').innerText = '⏸'; }
+
+    window.__atlasCanvasLoops = {
+      sync() {
+        for (const [id, controller] of atlasCanvasControllers) {
+          if (atlasCanvasMayRun(id)) controller.start();
+          else {
+            controller.stop();
+            const view = document.getElementById(atlasCanvasView[id]);
+            if (!atlasPageHidden && !document.hidden && atlasMotionPreference.matches &&
+                location.hash !== '#legacy' && view && !view.hidden &&
+                !view.classList.contains('hidden')) controller.drawOnce();
+          }
+        }
+      },
+      stopAll() {
+        for (const controller of atlasCanvasControllers.values()) controller.stop();
+      },
+      getActiveLoopCount() {
+        return [...atlasCanvasControllers.values()].filter(controller => controller.isRunning()).length;
+      },
+      getStats() {
+        return {
+          active: [...atlasCanvasControllers].filter(([, controller]) => controller.isRunning())
+            .map(([id]) => id),
+          initialized: atlasCanvasControllers.size,
+          reducedMotion: atlasMotionPreference.matches,
+          pageHidden: document.hidden || atlasPageHidden
+        };
+      }
+    };
+    document.addEventListener('visibilitychange', () => window.__atlasCanvasLoops.sync());
+    window.addEventListener('hashchange', () => window.__atlasCanvasLoops.sync());
+    atlasMotionPreference.addEventListener('change', () => window.__atlasCanvasLoops.sync());
+    window.addEventListener('pagehide', () => {
+      atlasPageHidden = true;
+      window.__atlasCanvasLoops.stopAll();
+    });
+    window.addEventListener('pageshow', () => {
+      atlasPageHidden = false;
+      window.__atlasCanvasLoops.sync();
+    });
 
     // Pure HTML5 Canvas 3D Isometric Renderer
     function init3DCanvas(canvasId) {
@@ -541,8 +587,10 @@ tailwind.config = {
       if (!canvas) return;
       var ctx = canvas.getContext('2d');
       var t = 0;
+      var scheduledFrame = null;
 
       function render() {
+        scheduledFrame = null;
         var w = canvas.width = canvas.clientWidth || 800;
         var h = canvas.height = canvas.clientHeight || 500;
         ctx.clearRect(0, 0, w, h);
@@ -680,16 +728,34 @@ tailwind.config = {
         ctx.beginPath(); ctx.arc(tp.x + 15, tp.y - 6, 3, 0, Math.PI * 2); ctx.fill();
         ctx.shadowBlur = 0;
 
-        requestAnimationFrame(render);
+        if (atlasCanvasMayRun(canvasId)) scheduledFrame = requestAnimationFrame(render);
       }
-      render();
+
+      const controller = {
+        start() {
+          if (scheduledFrame === null && atlasCanvasMayRun(canvasId)) render();
+        },
+        stop() {
+          if (scheduledFrame !== null) {
+            cancelAnimationFrame(scheduledFrame);
+            scheduledFrame = null;
+          }
+        },
+        drawOnce() {
+          if (scheduledFrame === null) render();
+        },
+        isRunning() { return scheduledFrame !== null; }
+      };
+      atlasCanvasControllers.set(canvasId, controller);
+      if (atlasCanvasMayRun(canvasId)) controller.start();
+      else controller.drawOnce();
     }
 
-    window.addEventListener('load', function() {
-      init3DCanvas('atlas-3d-canvas');
-      init3DCanvas('atlas-3d-canvas-mini');
-      init3DCanvas('atlas-3d-canvas-full');
-    });
+    // Canvas elements are already parsed before this script; initialize once.
+    init3DCanvas('atlas-3d-canvas');
+    init3DCanvas('atlas-3d-canvas-mini');
+    init3DCanvas('atlas-3d-canvas-full');
+    window.__atlasCanvasLoops.sync();
   </script>
 
 <section id="atlas-legacy-workspace" class="bg-obsidian min-h-screen flex flex-col justify-between text-slate-200 hidden" hidden aria-label="Legacy operations prototype">
