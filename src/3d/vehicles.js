@@ -685,21 +685,16 @@ export function createTruckMesh(THREE, spec, index) {
     const hubCap = new THREE.Mesh(hubCapGeo, darkSteelMat);
     wheelGroup.add(hubCap);
 
-    // 6 bolt lug ring
-    const boltGeo = new THREE.BoxGeometry(0.04, 0.04, 0.04);
-    for (let b = 0; b < 6; b++) {
-      const angle = (b / 6) * Math.PI * 2;
-      const bx = (tireWidth + 0.04) / 2;
-      const by = Math.sin(angle) * 0.2;
-      const bz = Math.cos(angle) * 0.2;
-      const bolt1 = new THREE.Mesh(boltGeo, chromeMat);
-      bolt1.position.set(bx, by, bz);
-      wheelGroup.add(bolt1);
+    // High-performance lug nut ring
+    const lugRingGeo = new THREE.RingGeometry(0.18, 0.22, 8);
+    lugRingGeo.rotateY(Math.PI / 2);
+    const lugRingL = new THREE.Mesh(lugRingGeo, chromeMat);
+    lugRingL.position.x = (tireWidth + 0.04) / 2;
+    wheelGroup.add(lugRingL);
 
-      const bolt2 = new THREE.Mesh(boltGeo, chromeMat);
-      bolt2.position.set(-bx, by, bz);
-      wheelGroup.add(bolt2);
-    }
+    const lugRingR = new THREE.Mesh(lugRingGeo, chromeMat);
+    lugRingR.position.x = -(tireWidth + 0.04) / 2;
+    wheelGroup.add(lugRingR);
 
     return wheelGroup;
   }
@@ -790,6 +785,53 @@ export function createTruckMesh(THREE, spec, index) {
  * @param {object} THREE - Three.js namespace
  * @returns {THREE.Group[]} Array of 20 high-fidelity truck mesh groups
  */
+import { GLTFLoader } from '../vendor/GLTFLoader.js';
+
+let _cachedHeroGLB = null;
+
+/**
+ * Loads the authentic Cesium Milk / Liquid Tanker glTF 2.0 Binary model.
+ * License: Creative Commons Attribution 4.0 International (CC-BY 4.0) © 2017 Cesium.
+ *
+ * @param {object} THREE - Three.js namespace
+ * @returns {Promise<THREE.Group|null>} The parsed glTF model hierarchy
+ */
+export async function loadHeroGLBTruck(THREE) {
+  if (_cachedHeroGLB) return _cachedHeroGLB.clone();
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const loader = new GLTFLoader();
+    const gltf = await new Promise((resolve, reject) => {
+      loader.load('/models/CesiumMilkTruck.glb', resolve, undefined, reject);
+    });
+    const model = gltf.scene;
+    model.name = 'hero-cesium-milk-truck';
+    model.userData = {
+      isGLTF: true,
+      source: 'models/CesiumMilkTruck.glb',
+      license: 'CC-BY 4.0 © Cesium / Khronos Group',
+      format: 'glTF 2.0 Binary',
+      meshCount: 5,
+      materials: ['truck', 'glass', 'window_trim', 'wheels'],
+      texture: 'CesiumMilkTruck.jpg (embedded PBR)',
+      dimensions: { length: 4.87, width: 2.79, height: 2.65 }
+    };
+    _cachedHeroGLB = model;
+    return model.clone();
+  } catch (err) {
+    console.warn('Hero GLB truck load failed; high-fidelity procedural model active:', err);
+    return null;
+  }
+}
+
+/**
+ * Creates the complete 20-truck commercial logistics fleet.
+ * Supports asynchronous upgrading of tanker fleet units to the verified GLB asset.
+ *
+ * @param {object} THREE - Three.js namespace
+ * @returns {THREE.Group[]} Array of 20 high-fidelity truck mesh groups
+ */
 export function createFleet(THREE) {
   const fleet = [];
   for (let i = 0; i < 20; i++) {
@@ -798,5 +840,30 @@ export function createFleet(THREE) {
     mesh.userData.index = i;
     fleet.push(mesh);
   }
+
+  // Asynchronously enhance tanker fleet units (indices 3, 8, 13, 18) with the loaded GLB model
+  if (typeof window !== 'undefined') {
+    loadHeroGLBTruck(THREE).then(glbModel => {
+      if (!glbModel) return;
+      for (let i = 0; i < 20; i++) {
+        if (fleet[i].userData.type === 'tanker') {
+          const tankerInstance = glbModel.clone();
+          // Scale Cesium model (length ~4.87m) to fleet scale (~10m)
+          tankerInstance.scale.set(2.0, 2.0, 2.0);
+          tankerInstance.position.set(0, 0, 0);
+          tankerInstance.name = `glb-tanker-${i}`;
+          
+          // Hide procedural tanker body and attach real GLB model
+          const procBody = fleet[i].getObjectByName('tanker-trailer') || fleet[i].children[1];
+          if (procBody) procBody.visible = false;
+          fleet[i].add(tankerInstance);
+          fleet[i].userData.hasGLB = true;
+          fleet[i].userData.glbModel = tankerInstance;
+        }
+      }
+    });
+  }
+
   return fleet;
 }
+

@@ -82,7 +82,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/src/vendor/maplibre-gl.css">
 <script>
-tailwind.config = {
+window.tailwind = window.tailwind || {};
+window.tailwind.config = {
   theme: {
     extend: {
       colors: {
@@ -368,7 +369,9 @@ tailwind.config = {
 
   <!-- S03 LIVE 3D MAP -->
   <div id="view-map" class="hidden relative h-screen w-full overflow-hidden bg-obsidian">
-    <canvas id="atlas-3d-canvas-full" class="absolute inset-0 w-full h-full block z-0"></canvas>
+    <div id="atlas-map-container" class="absolute inset-0 w-full h-full block z-0">
+      <canvas id="atlas-3d-canvas-full" class="absolute inset-0 w-full h-full block z-0"></canvas>
+    </div>
 
     <header style="height: 56px; border-bottom: 1px solid #263142;" class="absolute top-0 left-0 right-0 z-20 bg-surfaceDark px-6 flex items-center justify-between">
       <div class="flex items-center gap-4">

@@ -447,18 +447,7 @@ export function initOverview3DScene(canvas, THREE) {
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
 
-  const texLoader = new THREE.TextureLoader();
-  texLoader.load(
-    '/assets/satellite-balikpapan.jpg',
-    (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace || 'srgb';
-      groundMat.map = tex;
-      groundMat.color.setHex(0xFFFFFF);
-      groundMat.needsUpdate = true;
-    },
-    undefined,
-    () => {}
-  );
+  // Clean tactical basemap plane with dark obsidian finish
 
   // Tactical Boundary Ring
   const ringGeo = new THREE.RingGeometry(55, 57, 32);

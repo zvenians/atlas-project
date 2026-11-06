@@ -3,8 +3,11 @@
 // Copyright © 2026 Kevin Oloan Simatupang. All rights reserved.
 
 import * as THREE from '../vendor/three.module.js';
+import * as maplibreglModule from '../vendor/maplibre-gl.mjs';
 import { initLanding3DScene, initOverview3DScene } from './scenes.js';
-import { initLiveMap3D } from './map3d.js';
+import { initAuthoritativeMap3D } from './engine.js';
+
+const maplibregl = maplibreglModule.default || maplibreglModule;
 
 export function setup3DCanvases(controllersMap) {
   if (!controllersMap) return;
@@ -26,13 +29,20 @@ export function setup3DCanvases(controllersMap) {
     if (c2) controllersMap.set('atlas-3d-canvas-mini', c2);
   }
 
-  const canvasMap = document.getElementById('atlas-3d-canvas-full');
-  if (canvasMap) {
+  const mapContainer = document.getElementById('atlas-map-container') ||
+                       document.getElementById('atlas-3d-canvas-full')?.parentElement ||
+                       document.getElementById('view-map');
+  if (mapContainer) {
     const prev = controllersMap.get('atlas-3d-canvas-full');
     if (prev && typeof prev.stop === 'function') prev.stop();
-    const c3 = initLiveMap3D(canvasMap, THREE);
+    const c3 = initAuthoritativeMap3D(mapContainer, THREE, maplibregl);
     if (c3) {
       controllersMap.set('atlas-3d-canvas-full', c3);
+      window.__atlas3DEngine = c3;
+      window.setCamMode = (m) => c3.setCameraMode?.(m);
+      window.resetOrbit = () => c3.resetCamera?.();
+      window.selectMapVehicle = (i) => c3.selectVehicle?.(i);
+      window.inspectHeroTruck = (a) => c3.inspectHeroTruck?.(a);
       window.__atlas3DSetCamMode = (m) => c3.setCameraMode?.(m);
       window.__atlas3DResetOrbit = () => c3.resetCamera?.();
       window.__atlas3DGetCameraState = () => c3.getCameraState?.();

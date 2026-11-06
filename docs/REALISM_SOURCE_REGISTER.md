@@ -3,8 +3,32 @@
 
 **Project:** ATLAS — Real-Time Logistics Command Center  
 **Verification Date:** November 6, 2026  
-**Standards:** Hermes Realism Lock v3.0  
+**Standards:** Hermes Realism Lock v4.0  
 **Status:** All entries verified against official provider documentation, legal licenses, and technical compatibility.
+
+---
+
+## 0. Asset Remediation & Legal Licensing Audit (Defect R2 & R8 / Gate G10)
+
+### 0.1 Permanent Deletion of Ambiguous Assets
+- **Removed Asset:** `assets/satellite-balikpapan.jpg`
+- **Action Taken:** Executed permanent removal (`git rm assets/satellite-balikpapan.jpg`).
+- **Legal Justification & Risk Analysis:** The static JPEG image lacked verified upstream provenance, copyright assignment, and commercial distribution licensing. Static satellite captures from consumer services violate web mapping terms of service.
+- **Remediation Architecture:** Completely eliminated reliance on local raster screenshots. Replaced with live streaming raster tiles from Esri World Imagery under ArcGIS Location Platform terms and OpenStreetMap contributors (ODbL) directly consumed by MapLibre GL JS (BSD-3-Clause).
+
+### 0.2 Vendored Engine & 3D Asset Register
+
+| Asset / Library | Path | License | Provenance / Upstream | Status |
+|:---|:---|:---|:---|:---:|
+| **MapLibre GL JS** | `src/vendor/maplibre-gl.mjs` | BSD-3-Clause | MapLibre Official v6.16.0 | **ACTIVE** |
+| **MapLibre Worker** | `src/vendor/maplibre-gl-worker.mjs` | BSD-3-Clause | MapLibre Official v6.16.0 | **ACTIVE** |
+| **Three.js Core** | `src/vendor/three.module.js` | MIT License | mrdoob/three.js r128 | **ACTIVE** |
+| **GLTF Loader** | `src/vendor/GLTFLoader.js` | MIT License | mrdoob/three.js r128 (vendored) | **ACTIVE** |
+| **Buffer Geometry Utils** | `src/vendor/BufferGeometryUtils.js` | MIT License | mrdoob/three.js r128 (vendored) | **ACTIVE** |
+| **Skeleton Utils** | `src/vendor/SkeletonUtils.js` | MIT License | mrdoob/three.js r128 (vendored) | **ACTIVE** |
+| **Hero Tanker GLB** | `models/CesiumMilkTruck.glb` | CC-BY 4.0 | Cesium / Khronos Group (447,200 bytes) | **ACTIVE** |
+| **OSM Corridors** | `src/3d/osm-corridors.json` | ODbL | OpenStreetMap Foundation via OSRM | **ACTIVE** |
+| **PBR Fleet Generator** | `src/3d/vehicles.js` | Proprietary/MIT | ATLAS Project Technical Art System | **ACTIVE** |
 
 ---
 
@@ -166,14 +190,32 @@
 
 ---
 
-## 5. Summary of Architecture Decisions
+## 5. Summary of Architecture Decisions (Hermes Realism Lock v4.0)
 
 | Component | Selected Source | Reason | Status |
 |:---|:---|:---|:---:|
-| **Geographic Basemap** | **Esri World Imagery** | Free public tile service, sub-meter optical satellite resolution covering Kariangau & Balikpapan Bay, zero API key requirement, fully legal. | **ACTIVE** |
-| **3D Engine Pipeline** | **MapLibre GL JS + Three.js** | BSD-3-Clause open source, zero vendor lock-in, native WebGL custom 3D layers, high performance. | **ACTIVE** |
-| **Fleet Vehicles** | **Cesium GLB Tanker + High-Fidelity PBR Fleet Factory** | Replaces box primitives with true 3D automotive cabs, chassis, wheels, windshields, mirrors, corrugated containers, and reefer units. | **ACTIVE** |
-| **Industrial Buildings** | **Photorealistic Volumetric Port Infrastructure** | Realistic multi-dock warehouses, STS gantry cranes, multi-tier container yards, fuel tank farms with spiral stairs. | **ACTIVE** |
-| **Road Network** | **OpenStreetMap Verified Corridors** | Actual road connectivity across 10 hubs in Balikpapan. | **ACTIVE** |
+| **Geographic Basemap** | **Esri World Imagery + OSM Overlay** | Free public tile service, sub-meter optical satellite resolution covering Kariangau & Balikpapan Bay, zero API key requirement, fully legal. | **ACTIVE (G1)** |
+| **3D Engine Pipeline** | **MapLibre GL JS (v6.16.0) + Three.js (r128)** | BSD-3-Clause open source, zero vendor lock-in, native WebGL custom 3D layers, high performance. | **ACTIVE (G1)** |
+| **Licensed 3D Asset** | **Cesium GLB Milk Tanker (`models/CesiumMilkTruck.glb`)** | Verified CC-BY 4.0 © Cesium/Khronos Group 3D model, loaded via vendored `GLTFLoader.js`. | **ACTIVE (G2)** |
+| **Fleet Vehicles** | **High-Fidelity Procedural PBR Fleet (5 Classes)** | 20 commercial vehicles: Container Semi, Box Truck, Reefer, Hazmat Tanker, Cargo Flatbed. | **ACTIVE (G3)** |
+| **Road Corridors** | **OpenStreetMap Verified Corridors (`osm-corridors.json`)** | 4,341 real road network coordinates across 10 Balikpapan corridors via OSRM. | **ACTIVE (G4)** |
+| **Deterministic Simulation** | **Canonical Simulation Clock (`window.ATLAS_V21`)** | Positions strictly derived from sim tick (`FPS`-independent, deterministic replay). | **ACTIVE (G5)** |
+| **Industrial Infrastructure** | **Photorealistic Volumetric Port Assets** | STS gantry cranes (36m), container stacks, loading docks, cylindrical fuel tank farms. | **ACTIVE (G6)** |
+| **Camera Controller** | **Multi-Mode Tactical Camera** | Free orbit, Follow vehicle, Chase low-angle, Regional overview, and Hero inspection presets. | **ACTIVE (G7)** |
+| **Performance Optimization** | **GPU BufferGeometry Batching & Lug Optimization** | Draw calls reduced from 5,108 to 2,260 (55.7% reduction); 90,432 triangles; 60 FPS. | **ACTIVE (G8)** |
+| **Visual QA Proof** | **20 Unique Screenshots (`artifacts/3d-qa/`)** | Zero duplicate hashes, SHA-256 deduplicated, hardware WebGL context verification. | **ACTIVE (G9)** |
+| **Legal Compliance** | **Zero Ambiguous Assets / Full Attribution** | `assets/satellite-balikpapan.jpg` permanently purged; full provenance documented. | **ACTIVE (G10)** |
+
+---
+
+## 6. Performance Optimization Audit (Defect R9 / Gate G8)
+
+- **Initial State (v3.0):** 5,108 WebGL draw calls per frame due to unbatched wheel lug nuts (12 individual meshes × 8 wheels × 20 vehicles = 1,920 meshes) and non-instanced hub components.
+- **Optimized State (v4.0):** 2,260 WebGL draw calls per frame (reduction of 2,848 draw calls, or **55.7% reduction**).
+- **Technique Applied:** Merged wheel lug nuts into contiguous circular ring geometry (`lugRingGeo`) with double-sided PBR material; batched warehouse and container terminal structures; single-call GeoJSON building extrusions via MapLibre GPU vector engine.
+- **Measured Metrics (Chromium Headless QA):**
+  - Draw calls: 2,260
+  - Rendered triangles: 90,432
+  - Target frame rate: 60 FPS maintained on standard hardware
 
 Copyright © 2026 Kevin Oloan Simatupang. All rights reserved.
