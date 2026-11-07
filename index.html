@@ -406,18 +406,18 @@ window.tailwind.config = {
       <button onclick="resetOrbit()" class="text-copper">🧭</button>
     </div>
 
-    <div id="truck-callout-map" style="top: 42%; left: 45%;" class="absolute z-20 glass-panel px-3 py-1.5 rounded-lg text-xs font-mono text-tealAccent flex items-center gap-2 glow-teal">
+    <div id="truck-callout-map" style="display: none;" class="absolute z-20 glass-panel px-3 py-1.5 rounded-lg text-xs font-mono text-tealAccent flex items-center gap-2 glow-teal pointer-events-none">
       <span style="width: 8px; height: 8px;" class="rounded-full bg-tealAccent"></span>
-      <span>TRK-012 · In Transit • 42 km/h · ETA 14:08 • 12.4 km</span>
+      <span>TRK-001 · In Transit • 42 km/h</span>
     </div>
 
-    <div style="top: 72px; right: 24px;" class="absolute z-20 glass-panel rounded-lg w-80 p-4 flex flex-col gap-4">
+    <div id="vehicle-inspector-panel" style="top: 72px; right: 24px;" class="absolute z-20 glass-panel rounded-lg w-72 sm:w-80 max-w-[calc(100vw-32px)] p-3 sm:p-4 flex flex-col gap-3 sm:gap-4 text-xs">
       <div class="flex items-center justify-between pb-2" style="border-bottom: 1px solid #263142;">
         <div class="flex items-center gap-2">
-          <span class="font-bold text-sm text-white">TRK-012</span>
-          <span style="background: rgba(45,212,191,0.15); color: #2DD4BF; border: 1px solid rgba(45,212,191,0.3);" class="px-2 py-0.5 text-xs font-mono rounded-full">In Transit</span>
+          <span id="inspector-truck-id" class="font-bold text-sm text-white">TRK-001</span>
+          <span id="inspector-truck-status" style="background: rgba(45,212,191,0.15); color: #2DD4BF; border: 1px solid rgba(45,212,191,0.3);" class="px-2 py-0.5 text-xs font-mono rounded-full">In Transit</span>
         </div>
-        <button onclick="document.getElementById('truck-callout-map').classList.toggle('hidden')" style="color: #94A3B8;">✕</button>
+        <button onclick="document.getElementById('vehicle-inspector-panel').classList.toggle('hidden')" style="color: #94A3B8;" title="Close Inspector">✕</button>
       </div>
 
       <div class="flex text-xs font-medium" style="border-bottom: 1px solid #263142;">
@@ -426,18 +426,19 @@ window.tailwind.config = {
         <button class="pb-1.5 px-3" style="color: #94A3B8;">Telemetry</button>
       </div>
 
-      <div class="flex flex-col gap-2 text-xs font-mono">
-        <div class="flex justify-between"><span style="color: #94A3B8;">Driver:</span><span class="text-white font-semibold">Rizky Pratama</span></div>
-        <div class="flex justify-between"><span style="color: #94A3B8;">Route:</span><span>Kariangau Hub → Balikpapan Depot</span></div>
-        <div class="flex justify-between"><span style="color: #94A3B8;">ETA:</span><span class="text-tealAccent">14:08 WITA (1h 54m)</span></div>
-        <div class="flex justify-between"><span style="color: #94A3B8;">Distance:</span><span>12.4 km</span></div>
-        <div class="flex justify-between"><span style="color: #94A3B8;">Speed:</span><span>42 km/h</span></div>
-        <div class="flex justify-between"><span style="color: #94A3B8;">Load:</span><span>Fuel (12,000 L)</span></div>
+      <div class="flex flex-col gap-2 font-mono">
+        <div class="flex justify-between"><span style="color: #94A3B8;">Driver:</span><span id="inspector-truck-driver" class="text-white font-semibold">Rizky Pratama</span></div>
+        <div class="flex justify-between"><span style="color: #94A3B8;">Route:</span><span id="inspector-truck-route">Kariangau Logistics Hub → KM 13 Freight Terminal</span></div>
+        <div class="flex justify-between"><span style="color: #94A3B8;">ETA:</span><span id="inspector-truck-eta" class="text-tealAccent">21m remaining (14.4 km)</span></div>
+        <div class="flex justify-between"><span style="color: #94A3B8;">Distance:</span><span id="inspector-truck-dist">14.4 km / 14.4 km</span></div>
+        <div class="flex justify-between"><span style="color: #94A3B8;">Speed:</span><span id="inspector-truck-speed">42 km/h</span></div>
+        <div class="flex justify-between"><span style="color: #94A3B8;">Load:</span><span id="inspector-truck-load">Fuel (12,000 L)</span></div>
+        <div class="flex justify-between"><span style="color: #94A3B8;">Class:</span><span id="inspector-truck-class" class="text-slate-300">40ft Container Semi-Trailer</span></div>
       </div>
 
-      <div class="grid grid-cols-2 gap-2 pt-2">
+      <div class="grid grid-cols-2 gap-2 pt-1">
         <button onclick="setCamMode('follow')" class="py-2 rounded bg-copper text-black font-bold text-xs">Follow Vehicle</button>
-        <button class="py-2 rounded bg-surfaceDark text-xs font-semibold" style="border: 1px solid #263142;">Open Trip →</button>
+        <button onclick="setCamMode('chase')" class="py-2 rounded bg-surfaceDark text-xs font-semibold" style="border: 1px solid #263142;">Chase View</button>
       </div>
     </div>
 

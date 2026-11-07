@@ -253,4 +253,39 @@
   3. **NC3 (Frozen Clock):** Verified vehicle progression freezes when simulation clock is paused.
   4. **NC4 (Camera Decoupling):** Verified Free camera mode does not track vehicle movement.
 
+---
+
+## 8. Hermes Realism Lock v4.1.1 CI Camera & Telemetry Hotfix Audit
+
+### 8.1 CI Overview Camera Transition Completion (tests/3d-evidence.mjs:326)
+- **Defect:** Remote GitHub Actions runner failed on `assert.ok(camOverview.zoom <= 13)` (`zoom: 13.1085`). `map.flyTo` had a 1200ms duration, while the test sampled camera state prematurely at 800ms during mid-flight deceleration on slower CI hardware.
+- **Resolution:** Refactored `setCameraMode('overview')` to return a Promise that listens for MapLibre `moveend`. In `tests/3d-evidence.mjs`, added explicit wait condition for `!map.isMoving()` before asserting target state. Maintained strict `zoom <= 13` and `altitudeMeters > 2500` requirements with zero test weakening.
+
+### 8.2 Live Map Follow & Chase Camera Framing of Hero GLB Truck
+- **Defect:** Follow and Chase camera test steps previously selected vehicle index 0 (procedural container truck). In addition, `#truck-callout-map` was hardcoded at `top: 42%; left: 45%`, directly occluding the vehicle on live map.
+- **Resolution:**
+  - Updated live map tracking to select vehicle index 3 (TRK-004 Hazmat Tanker, authentic licensed GLB model).
+  - Pinned `#truck-callout-map` using `map.project([pos.lng, pos.lat])` to float exactly 75px above vehicle screen location with `transform: translateX(-50%)`, ensuring 100% vehicle visibility without occlusion.
+  - Tuned Chase camera to 28m offset behind vehicle heading at zoom 19.8 and 70° pitch for authentic cinematic framing.
+
+### 8.3 Truthful Telemetry Synchronization & Elimination of Static Values
+- **Defect:** S03 Live Map inspector panel contained hardcoded static strings (`TRK-012`, `Rizky Pratama`, `14:08 WITA`, `12.4 km`), disconnected from the active vehicle. `src/legacy-integration.js` hardcoded `TRK-012` into camera toast notifications.
+- **Resolution:**
+  - Added semantic element IDs to the inspector card (`#inspector-truck-id`, `#inspector-truck-status`, `#inspector-truck-driver`, `#inspector-truck-route`, `#inspector-truck-eta`, `#inspector-truck-dist`, `#inspector-truck-speed`, `#inspector-truck-load`, `#inspector-truck-class`).
+  - Derived all telemetry fields dynamically in `_updateVehicleTelemetryUI(index)` from active vehicle route waypoints, simulation clock tick, and vehicle class.
+  - Synchronized camera mode toasts in `src/legacy-integration.js` and `src/3d/engine.js` with active vehicle ID.
+  - Made inspector panel responsive for mobile viewports (`max-w-[calc(100vw-32px)]`) with dismiss toggle.
+
+### 8.4 Mathematical Vehicle Orientation in Mercator Coordinate Space
+- **Defect:** Euler rotation `(PI/2, -bearing + PI, 0)` inverted North/South axes in Mercator space due to default Euler 'XYZ' rotation order.
+- **Resolution:** Replaced Euler angles with basis matrix quaternion:
+  - $\mathbf{forward} = (\sin\theta, -\cos\theta, 0)$
+  - $\mathbf{up} = (0, 0, 1)$
+  - $\mathbf{right} = (\cos\theta, \sin\theta, 0)$
+  - `truck.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, forward))`
+  - Mathematically guarantees exact forward alignment along route bearing in MapLibre Mercator space (+X East, +Y South, +Z Up) without gimbal lock.
+
+### 8.5 Negative Control 5: Selection Boundary Guard
+- Added Negative Control 5 verifying out-of-bounds vehicle selection indices (-5, 999) are safely clamped to valid fleet range [0, 19] without throwing exceptions or generating NaN.
+
 Copyright © 2026 Kevin Oloan Simatupang. All rights reserved.

@@ -742,8 +742,13 @@ export class Atlas3DEngine {
       if (truck) {
         truck.position.set(merc.x, merc.y, 0);
         truck.scale.set(scale, scale, scale);
-        // Face forward along route bearing (MapLibre Z is up, Y is south)
-        truck.rotation.set(Math.PI / 2, (-pos.bearing * Math.PI / 180) + Math.PI, 0);
+        // Face forward along route bearing in MapLibre Mercator space (+X East, +Y South, +Z Up)
+        const rad = (pos.bearing * Math.PI) / 180;
+        const forward = new THREE.Vector3(Math.sin(rad), -Math.cos(rad), 0);
+        const up = new THREE.Vector3(0, 0, 1);
+        const right = new THREE.Vector3(Math.cos(rad), Math.sin(rad), 0);
+        const rotMatrix = new THREE.Matrix4().makeBasis(right, up, forward);
+        truck.quaternion.setFromRotationMatrix(rotMatrix);
 
         // Physically accurate wheel rotation: angularRotation = travelMeters / wheelRadius
         truck.userData.setWheelRotation?.(pos.travelMeters || (this._routeProgressions[i] * 1000));
@@ -798,7 +803,7 @@ export class Atlas3DEngine {
         zoom: 19.4,
       });
     } else if (this.cameraMode === 'chase') {
-      const offsetDeg = 35 / 111139; // ~35m offset behind vehicle
+      const offsetDeg = 28 / 111139; // ~28m offset behind vehicle along heading
       const bearingRad = (pos.bearing * Math.PI) / 180;
       const chaseLng = pos.lng - Math.sin(bearingRad) * (offsetDeg / Math.cos(pos.lat * Math.PI / 180));
       const chaseLat = pos.lat - Math.cos(bearingRad) * offsetDeg;
@@ -806,58 +811,128 @@ export class Atlas3DEngine {
       this.map.jumpTo({
         center: [chaseLng, chaseLat],
         bearing: pos.bearing,
-        pitch: 72,
-        zoom: 20.2,
+        pitch: 70,
+        zoom: 19.8,
       });
     }
   }
 
   /**
-   * Updates S03 UI telemetry overlay.
+   * Updates S03 UI telemetry overlay and inspector panel with live truthful data.
    */
   _updateVehicleTelemetryUI(index) {
     const vr = this.vehicleRoutes[index];
     if (!vr) return;
 
-    const fleetInfo = FLEET_DATA[index] || { driver: 'Logistics Operator', load: 'General Freight (10 T)' };
+    const fleetInfo = FLEET_DATA[index] || { driver: 'Logistics Operator ' + (index + 1), load: 'General Cargo' };
     const pos = interpolateRoute(vr.waypoints, this._routeProgressions[index]);
+    const truckId = `TRK-${String(index + 1).padStart(3, '0')}`;
+    const fromName = HUBS[vr.from]?.name || vr.from;
+    const toName = HUBS[vr.to]?.name || vr.to;
+    const routeStr = `${fromName} → ${toName}`;
+    const totalKm = (vr.totalDistanceMeters / 1000).toFixed(1);
+    const prog = this._routeProgressions[index] || 0;
+    const remainingKm = Math.max(0.1, (vr.totalDistanceMeters * (1 - prog)) / 1000).toFixed(1);
 
+    const sim = window.ATLAS_V21?.sim;
+    const snap = sim ? sim.getSnapshot() : { status: 'RUNNING', speedMultiplier: 1, tick: 0, scenario: 'NORMAL_DELIVERY' };
+    const isStopped = snap.scenario === 'VEHICLE_STOP' && (index % 4 === 0);
+    const isDelayed = snap.scenario === 'TRAFFIC_DELAY';
+    const speedKmh = isStopped ? 0 : (isDelayed ? 24 : Math.round(38 + (index * 3) % 15));
+    const statusStr = isStopped ? 'Stationary (Hold)' : (isDelayed ? 'Traffic Delay' : 'In Transit');
+    const statusColor = isStopped ? '#EF4444' : (isDelayed ? '#F59E0B' : '#2DD4BF');
+
+    const etaMinutes = Math.round((Number(remainingKm) / Math.max(speedKmh, 20)) * 60);
+    const etaStr = `${etaMinutes}m remaining (${remainingKm} km)`;
+    const truckType = VEHICLE_TYPES[index % VEHICLE_TYPES.length]?.label || 'Commercial Hauler';
+
+    // Update Floating Screen Callout (pinned 75px above vehicle projection)
     const callout = document.getElementById('truck-callout-map');
-    if (callout) {
-      callout.innerHTML = `
-        <span style="width: 8px; height: 8px;" class="rounded-full bg-tealAccent"></span>
-        <span>TRK-${String(index + 1).padStart(3, '0')} · In Transit • 42 km/h · ETA 14:08 • ${vr.distanceKm || '12.4'} km</span>
-      `;
+    if (callout && this.map) {
+      if (this.cameraMode === 'inspect') {
+        callout.style.display = 'none';
+      } else {
+        callout.style.display = '';
+        const pt = this.map.project([pos.lng, pos.lat]);
+        const topPx = Math.max(65, Math.round(pt.y - 75));
+        const leftPx = Math.round(pt.x);
+        callout.style.left = `${leftPx}px`;
+        callout.style.top = `${topPx}px`;
+        callout.style.transform = 'translateX(-50%)';
+        callout.style.bottom = 'auto';
+        callout.style.right = 'auto';
+        callout.style.pointerEvents = 'none';
+        callout.innerHTML = `
+          <span style="width: 8px; height: 8px; background: ${statusColor};" class="rounded-full"></span>
+          <span>${truckId} · ${statusStr} • ${speedKmh} km/h · ETA ${etaStr}</span>
+        `;
+      }
     }
+
+    // Synchronize Inspector Panel elements dynamically
+    const elId = document.getElementById('inspector-truck-id');
+    if (elId) elId.textContent = truckId;
+    const elStatus = document.getElementById('inspector-truck-status');
+    if (elStatus) {
+      elStatus.textContent = statusStr;
+      elStatus.style.color = statusColor;
+      elStatus.style.borderColor = `${statusColor}4D`;
+      elStatus.style.background = `${statusColor}26`;
+    }
+    const elDriver = document.getElementById('inspector-truck-driver');
+    if (elDriver) elDriver.textContent = fleetInfo.driver;
+    const elRoute = document.getElementById('inspector-truck-route');
+    if (elRoute) elRoute.textContent = routeStr;
+    const elEta = document.getElementById('inspector-truck-eta');
+    if (elEta) elEta.textContent = etaStr;
+    const elDist = document.getElementById('inspector-truck-dist');
+    if (elDist) elDist.textContent = `${remainingKm} km / ${totalKm} km`;
+    const elSpeed = document.getElementById('inspector-truck-speed');
+    if (elSpeed) elSpeed.textContent = `${speedKmh} km/h`;
+    const elLoad = document.getElementById('inspector-truck-load');
+    if (elLoad) elLoad.textContent = fleetInfo.load;
+    const elClass = document.getElementById('inspector-truck-class');
+    if (elClass) elClass.textContent = truckType;
   }
 
   // --- PUBLIC API IMPLEMENTATION ---
 
   /**
    * Set camera mode: 'free', 'follow', 'chase', 'overview'.
+   * Returns a Promise that resolves when the transition is complete.
    */
   setCameraMode(mode) {
     this.cameraMode = mode;
     this._syncCameraButtonsUI(mode);
 
     const callout = document.getElementById('truck-callout-map');
-    if (callout) callout.style.display = '';
-
-    if (mode === 'overview') {
-      this.map.flyTo({
-        center: [116.8300, -1.2200],
-        zoom: 12.2,
-        pitch: 45,
-        bearing: -15,
-        duration: 1200,
-      });
-    } else if (mode === 'follow' || mode === 'chase') {
-      this._updateCameraTracking();
-    }
+    if (callout) callout.style.display = (mode === 'inspect') ? 'none' : '';
 
     if (typeof window.atlasLegacyNotice === 'function') {
       window.atlasLegacyNotice(`3D Camera mode: ${mode.toUpperCase()} (active: TRK-${String(this.selectedVehicle + 1).padStart(3, '0')})`);
     }
+
+    if (mode === 'overview') {
+      return new Promise((resolve) => {
+        if (!this.map) return resolve();
+        const onMoveEnd = () => {
+          this.map.off('moveend', onMoveEnd);
+          resolve();
+        };
+        this.map.on('moveend', onMoveEnd);
+        this.map.flyTo({
+          center: [116.8300, -1.2200],
+          zoom: 12.2,
+          pitch: 45,
+          bearing: -15,
+          duration: 1200,
+        });
+      });
+    } else if (mode === 'follow' || mode === 'chase') {
+      this._updateCameraTracking();
+      return Promise.resolve();
+    }
+    return Promise.resolve();
   }
 
   /**

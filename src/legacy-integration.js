@@ -401,7 +401,7 @@ function initPrimaryControlsBridge() {
     }
   };
   window.setCamMode = function setCamMode(mode) {
-    for (const m of ['free', 'follow', 'chase']) {
+    for (const m of ['free', 'follow', 'chase', 'overview']) {
       const node = document.getElementById('cam-' + m);
       if (node) {
         node.style.color = (m === mode) ? '#2DD4BF' : '#94A3B8';
@@ -416,11 +416,13 @@ function initPrimaryControlsBridge() {
         }
       }
     }
-    if (typeof window.__atlas3DSetCamMode === 'function') {
-      window.__atlas3DSetCamMode(mode);
-    }
+    const activeVehicle = window.__atlas3DEngine?.selectedVehicle ?? 0;
+    const activeTruckId = 'TRK-' + String(activeVehicle + 1).padStart(3, '0');
     if (typeof window.atlasLegacyNotice === 'function') {
-      window.atlasLegacyNotice('3D Camera mode: ' + mode.toUpperCase() + ' (active: TRK-012)');
+      window.atlasLegacyNotice('3D Camera mode: ' + mode.toUpperCase() + ' (active: ' + activeTruckId + ')');
+    }
+    if (typeof window.__atlas3DSetCamMode === 'function') {
+      return window.__atlas3DSetCamMode(mode);
     }
   };
   window.resetOrbit = function resetOrbit() {

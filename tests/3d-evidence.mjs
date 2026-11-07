@@ -292,10 +292,10 @@ try {
   await captureProof(mapPage, '15-camera-mode-free.png', '15. Tactical Free Orbit Camera Mode Perspective');
   report.assertions.push('Free tactical camera mode verified');
 
-  // 16. Follow Camera Mode (Continuous Tracking TRK-001)
-  await mapPage.evaluate(() => {
-    window.selectMapVehicle(0);
-    window.setCamMode('follow');
+  // 16. Follow Camera Mode (Continuous Tracking of Hero GLB Truck TRK-004)
+  await mapPage.evaluate(async () => {
+    window.selectMapVehicle(3); // Hero Hazmat Tanker (authentic GLB asset)
+    await window.setCamMode('follow');
   });
   await mapPage.waitForTimeout(600);
   const camFollow = await mapPage.evaluate(() => window.__atlas3DGetCameraState?.());
@@ -303,23 +303,39 @@ try {
   assert.ok(camFollow.altitudeMeters > 0 && camFollow.altitudeMeters < 1500, `Follow altitude must be realistic near ground, got ${camFollow.altitudeMeters}`);
   assert.ok(camFollow.zoom >= 18, `Follow zoom must be >= 18 for close vehicle tracking, got ${camFollow.zoom}`);
   assert.ok(camFollow.targetVehiclePosition, 'Follow mode must track target vehicle position');
-  await captureProof(mapPage, '16-camera-mode-follow.png', '16. Follow Camera Mode — Tracking TRK-001 at 58° Pitch');
+
+  // Verify dynamic telemetry synchronization with selected vehicle TRK-004
+  const calloutTextFollow = await mapPage.evaluate(() => document.getElementById('truck-callout-map')?.innerText);
+  assert.ok(calloutTextFollow?.includes('TRK-004'), `Callout must display selected truck TRK-004, got "${calloutTextFollow}"`);
+  const inspectorIdFollow = await mapPage.evaluate(() => document.getElementById('inspector-truck-id')?.innerText);
+  assert.equal(inspectorIdFollow, 'TRK-004', `Inspector must display selected truck TRK-004, got "${inspectorIdFollow}"`);
+
+  await captureProof(mapPage, '16-camera-mode-follow.png', '16. Follow Camera Mode — Tracking Hero GLB Tanker TRK-004 at 58° Pitch');
   report.assertions.push('Follow camera mode verified (tracking vehicle coordinates at high zoom)');
 
-  // 17. Chase Camera Mode (Low Behind-Vehicle Tracking)
-  await mapPage.evaluate(() => window.setCamMode('chase'));
+  // 17. Chase Camera Mode (Low Behind-Vehicle Tracking of Hero GLB Truck TRK-004)
+  await mapPage.evaluate(async () => {
+    window.selectMapVehicle(3);
+    await window.setCamMode('chase');
+  });
   await mapPage.waitForTimeout(600);
   const camChase = await mapPage.evaluate(() => window.__atlas3DGetCameraState?.());
   assert.equal(camChase?.mode, 'chase');
   assert.ok(camChase.altitudeMeters > 0 && camChase.altitudeMeters <= camFollow.altitudeMeters, `Chase altitude must be lower or equal to follow altitude, got ${camChase.altitudeMeters}`);
   assert.ok(camChase.zoom >= 19.5, `Chase zoom must be >= 19.5, got ${camChase.zoom}`);
   assert.ok(camChase.pitch >= 65, `Chase pitch must be low dynamic angle >= 65, got ${camChase.pitch}`);
-  await captureProof(mapPage, '17-camera-mode-chase.png', '17. Chase Camera Mode — Low Dynamic Chase Perspective at 72° Pitch');
-  report.assertions.push('Chase camera mode verified (low behind-vehicle chase angle at 72° pitch)');
+  await captureProof(mapPage, '17-camera-mode-chase.png', '17. Chase Camera Mode — Low Dynamic Chase Perspective at 70° Pitch');
+  report.assertions.push('Chase camera mode verified (low behind-vehicle chase angle at 70° pitch)');
 
   // 18. High-Altitude Regional Overview Camera Mode
-  await mapPage.evaluate(() => window.setCamMode('overview'));
-  await mapPage.waitForTimeout(800);
+  await mapPage.evaluate(async () => {
+    await window.setCamMode('overview');
+  });
+  // Await MapLibre transition completion without weakening zoom assertion
+  await mapPage.waitForFunction(() => {
+    const engine = window.__atlas3DEngine;
+    return engine?.map && !engine.map.isMoving();
+  }, { timeout: 10000 });
   const camOverview = await mapPage.evaluate(() => window.__atlas3DGetCameraState?.());
   assert.equal(camOverview?.mode, 'overview');
   assert.ok(camOverview.altitudeMeters > 2500, `Overview altitude must be high regional > 2500m, got ${camOverview.altitudeMeters}`);
@@ -463,6 +479,20 @@ try {
   assert.equal(freeCenterBefore.lng, freeCenterAfter.lng, 'Negative control: Free camera center does not move when vehicle moves');
   assert.equal(freeCenterBefore.lat, freeCenterAfter.lat, 'Negative control: Free camera center does not follow vehicle');
   report.assertions.push('Negative Control 4: Free camera mode does not track moving vehicle coordinates');
+
+  // --- NEGATIVE CONTROL 5: Vehicle Selection Boundary Guard & Clamping ---
+  const boundaryCheck = await mapPage.evaluate(() => {
+    const engine = window.__atlas3DEngine;
+    if (!engine) return null;
+    engine.selectVehicle(-5);
+    const below = engine.selectedVehicle;
+    engine.selectVehicle(999);
+    const above = engine.selectedVehicle;
+    return { below, above };
+  });
+  assert.equal(boundaryCheck?.below, 0, 'Negative control: Negative vehicle index clamps safely to 0');
+  assert.equal(boundaryCheck?.above, 19, 'Negative control: Excessive vehicle index clamps safely to 19');
+  report.assertions.push('Negative Control 5: Out-of-bounds vehicle selection safely clamped without error');
 
   await mapPage.close();
 
