@@ -80,8 +80,10 @@
   </style>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/src/vendor/maplibre-gl.css">
 <script>
-tailwind.config = {
+window.tailwind = window.tailwind || {};
+window.tailwind.config = {
   theme: {
     extend: {
       colors: {
@@ -367,7 +369,9 @@ tailwind.config = {
 
   <!-- S03 LIVE 3D MAP -->
   <div id="view-map" class="hidden relative h-screen w-full overflow-hidden bg-obsidian">
-    <canvas id="atlas-3d-canvas-full" class="absolute inset-0 w-full h-full block z-0"></canvas>
+    <div id="atlas-map-container" class="absolute inset-0 w-full h-full block z-0">
+      <canvas id="atlas-3d-canvas-full" class="absolute inset-0 w-full h-full block z-0"></canvas>
+    </div>
 
     <header style="height: 56px; border-bottom: 1px solid #263142;" class="absolute top-0 left-0 right-0 z-20 bg-surfaceDark px-6 flex items-center justify-between">
       <div class="flex items-center gap-4">
@@ -397,22 +401,23 @@ tailwind.config = {
       <button onclick="setCamMode('free')" id="cam-free" style="color: #94A3B8;">Free</button>
       <button onclick="setCamMode('follow')" id="cam-follow" class="text-tealAccent font-bold px-2 py-0.5 rounded" style="background: rgba(45,212,191,0.1); border: 1px solid rgba(45,212,191,0.3);">Follow</button>
       <button onclick="setCamMode('chase')" id="cam-chase" style="color: #94A3B8;">Chase</button>
+      <button onclick="setCamMode('overview')" id="cam-overview" style="color: #94A3B8;">Overview</button>
       <span style="color: #475569;">|</span>
       <button onclick="resetOrbit()" class="text-copper">🧭</button>
     </div>
 
-    <div id="truck-callout-map" style="top: 42%; left: 45%;" class="absolute z-20 glass-panel px-3 py-1.5 rounded-lg text-xs font-mono text-tealAccent flex items-center gap-2 glow-teal">
+    <div id="truck-callout-map" style="display: none;" class="absolute z-20 glass-panel px-3 py-1.5 rounded-lg text-xs font-mono text-tealAccent flex items-center gap-2 glow-teal pointer-events-none">
       <span style="width: 8px; height: 8px;" class="rounded-full bg-tealAccent"></span>
-      <span>TRK-012 · In Transit • 42 km/h · ETA 14:08 • 12.4 km</span>
+      <span>TRK-001 · In Transit • 42 km/h</span>
     </div>
 
-    <div style="top: 72px; right: 24px;" class="absolute z-20 glass-panel rounded-lg w-80 p-4 flex flex-col gap-4">
+    <div id="vehicle-inspector-panel" style="top: 72px; right: 24px;" class="absolute z-20 glass-panel rounded-lg w-72 sm:w-80 max-w-[calc(100vw-32px)] p-3 sm:p-4 flex flex-col gap-3 sm:gap-4 text-xs">
       <div class="flex items-center justify-between pb-2" style="border-bottom: 1px solid #263142;">
         <div class="flex items-center gap-2">
-          <span class="font-bold text-sm text-white">TRK-012</span>
-          <span style="background: rgba(45,212,191,0.15); color: #2DD4BF; border: 1px solid rgba(45,212,191,0.3);" class="px-2 py-0.5 text-xs font-mono rounded-full">In Transit</span>
+          <span id="inspector-truck-id" class="font-bold text-sm text-white">TRK-001</span>
+          <span id="inspector-truck-status" style="background: rgba(45,212,191,0.15); color: #2DD4BF; border: 1px solid rgba(45,212,191,0.3);" class="px-2 py-0.5 text-xs font-mono rounded-full">In Transit</span>
         </div>
-        <button onclick="document.getElementById('truck-callout-map').classList.toggle('hidden')" style="color: #94A3B8;">✕</button>
+        <button onclick="document.getElementById('vehicle-inspector-panel').classList.toggle('hidden')" style="color: #94A3B8;" title="Close Inspector">✕</button>
       </div>
 
       <div class="flex text-xs font-medium" style="border-bottom: 1px solid #263142;">
@@ -421,18 +426,19 @@ tailwind.config = {
         <button class="pb-1.5 px-3" style="color: #94A3B8;">Telemetry</button>
       </div>
 
-      <div class="flex flex-col gap-2 text-xs font-mono">
-        <div class="flex justify-between"><span style="color: #94A3B8;">Driver:</span><span class="text-white font-semibold">Rizky Pratama</span></div>
-        <div class="flex justify-between"><span style="color: #94A3B8;">Route:</span><span>Kariangau Hub → Balikpapan Depot</span></div>
-        <div class="flex justify-between"><span style="color: #94A3B8;">ETA:</span><span class="text-tealAccent">14:08 WITA (1h 54m)</span></div>
-        <div class="flex justify-between"><span style="color: #94A3B8;">Distance:</span><span>12.4 km</span></div>
-        <div class="flex justify-between"><span style="color: #94A3B8;">Speed:</span><span>42 km/h</span></div>
-        <div class="flex justify-between"><span style="color: #94A3B8;">Load:</span><span>Fuel (12,000 L)</span></div>
+      <div class="flex flex-col gap-2 font-mono">
+        <div class="flex justify-between"><span style="color: #94A3B8;">Driver:</span><span id="inspector-truck-driver" class="text-white font-semibold">Rizky Pratama</span></div>
+        <div class="flex justify-between"><span style="color: #94A3B8;">Route:</span><span id="inspector-truck-route">Kariangau Logistics Hub → KM 13 Freight Terminal</span></div>
+        <div class="flex justify-between"><span style="color: #94A3B8;">ETA:</span><span id="inspector-truck-eta" class="text-tealAccent">21m remaining (14.4 km)</span></div>
+        <div class="flex justify-between"><span style="color: #94A3B8;">Distance:</span><span id="inspector-truck-dist">14.4 km / 14.4 km</span></div>
+        <div class="flex justify-between"><span style="color: #94A3B8;">Speed:</span><span id="inspector-truck-speed">42 km/h</span></div>
+        <div class="flex justify-between"><span style="color: #94A3B8;">Load:</span><span id="inspector-truck-load">Fuel (12,000 L)</span></div>
+        <div class="flex justify-between"><span style="color: #94A3B8;">Class:</span><span id="inspector-truck-class" class="text-slate-300">40ft Container Semi-Trailer</span></div>
       </div>
 
-      <div class="grid grid-cols-2 gap-2 pt-2">
+      <div class="grid grid-cols-2 gap-2 pt-1">
         <button onclick="setCamMode('follow')" class="py-2 rounded bg-copper text-black font-bold text-xs">Follow Vehicle</button>
-        <button class="py-2 rounded bg-surfaceDark text-xs font-semibold" style="border: 1px solid #263142;">Open Trip →</button>
+        <button onclick="setCamMode('chase')" class="py-2 rounded bg-surfaceDark text-xs font-semibold" style="border: 1px solid #263142;">Chase View</button>
       </div>
     </div>
 
@@ -448,6 +454,11 @@ tailwind.config = {
       </div>
       <div class="text-white font-semibold">Sim Time: 08:14:26 WITA</div>
       <button onclick="resetSim()" class="px-2.5 py-1 rounded bg-surfaceDark" style="border: 1px solid #263142;">↺ Reset</button>
+    </div>
+
+    <!-- Legal Geospatial Attribution Badge -->
+    <div style="bottom: 8px; left: 16px;" class="absolute z-20 glass-panel px-2.5 py-1 rounded text-[10px] font-mono text-slate-400 pointer-events-none" style="border: 1px solid #263142;">
+      <span>Basemap: Esri World Imagery (Maxar, Earthstar Geographics) | Roads: OpenStreetMap contributors</span>
     </div>
   </div>
 
@@ -581,153 +592,17 @@ tailwind.config = {
       window.__atlasCanvasLoops.sync();
     });
 
-    // Pure HTML5 Canvas 3D Isometric Renderer
+    window.atlasCanvasMayRun = atlasCanvasMayRun;
+
+    // Initial lifecycle bridge for 3D canvases.
+    // Preserves WebGL context initialization for the Three.js 3D subsystem.
     function init3DCanvas(canvasId) {
       var canvas = document.getElementById(canvasId);
       if (!canvas) return;
-      var ctx = canvas.getContext('2d');
-      var t = 0;
       var scheduledFrame = null;
 
       function render() {
         scheduledFrame = null;
-        var w = canvas.width = canvas.clientWidth || 800;
-        var h = canvas.height = canvas.clientHeight || 500;
-        ctx.clearRect(0, 0, w, h);
-
-        // Background Dusk/Night Gradient
-        var grad = ctx.createLinearGradient(0, 0, 0, h);
-        grad.addColorStop(0, '#0B0F14');
-        grad.addColorStop(1, '#102030');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, w, h);
-
-        var cx = w / 2;
-        var cy = h / 2 + 30;
-
-        // Oscillating Orbit / Pan Camera angle
-        var orbit = Math.sin(t * 0.02) * 0.15;
-
-        // Helper Isometric Projection
-        function project(x, y, z) {
-          var rx = x * Math.cos(orbit) - z * Math.sin(orbit);
-          var rz = x * Math.sin(orbit) + z * Math.cos(orbit);
-          var isoX = cx + (rx - rz) * 2.2;
-          var isoY = cy + (rx + rz) * 1.1 - y * 2.2;
-          return { x: isoX, y: isoY };
-        }
-
-        // Draw Ground Grid / Water
-        ctx.strokeStyle = '#1E293B';
-        ctx.lineWidth = 1;
-        for (var g = -100; g <= 100; g += 20) {
-          var p1 = project(-100, 0, g);
-          var p2 = project(100, 0, g);
-          ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
-          var p3 = project(g, 0, -100);
-          var p4 = project(g, 0, 100);
-          ctx.beginPath(); ctx.moveTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y); ctx.stroke();
-        }
-
-        // Glowing Teal Highway / Toll Road
-        ctx.strokeStyle = '#2DD4BF';
-        ctx.lineWidth = 12;
-        ctx.shadowColor = '#2DD4BF';
-        ctx.shadowBlur = 10;
-        var rStart = project(-120, 0, -10);
-        var rEnd = project(120, 0, -10);
-        ctx.beginPath(); ctx.moveTo(rStart.x, rStart.y); ctx.lineTo(rEnd.x, rEnd.y); ctx.stroke();
-        ctx.shadowBlur = 0;
-
-        // Red Dashed Geofence Polygon (Kariangau Port Zone)
-        ctx.strokeStyle = '#EF4444';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6, 4]);
-        var g1 = project(-60, 0, -60);
-        var g2 = project(80, 0, -60);
-        var g3 = project(80, 0, 60);
-        var g4 = project(-60, 0, 60);
-        ctx.beginPath();
-        ctx.moveTo(g1.x, g1.y); ctx.lineTo(g2.x, g2.y); ctx.lineTo(g3.x, g3.y); ctx.lineTo(g4.x, g4.y);
-        ctx.closePath(); ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Warehouses (Extruded 3D)
-        function drawBox(x, y, z, dx, dy, dz, color) {
-          var p1 = project(x, y, z);
-          var p2 = project(x + dx, y, z);
-          var p3 = project(x + dx, y, z + dz);
-          var p4 = project(x, y, z + dz);
-
-          var pt1 = project(x, y + dy, z);
-          var pt2 = project(x + dx, y + dy, z);
-          var pt3 = project(x + dx, y + dy, z + dz);
-          var pt4 = project(x, y + dy, z + dz);
-
-          ctx.fillStyle = color;
-          ctx.beginPath();
-          ctx.moveTo(pt1.x, pt1.y); ctx.lineTo(pt2.x, pt2.y); ctx.lineTo(pt3.x, pt3.y); ctx.lineTo(pt4.x, pt4.y);
-          ctx.closePath(); ctx.fill();
-
-          ctx.fillStyle = 'rgba(0,0,0,0.3)';
-          ctx.beginPath();
-          ctx.moveTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.lineTo(pt3.x, pt3.y); ctx.lineTo(pt2.x, pt2.y);
-          ctx.closePath(); ctx.fill();
-        }
-
-        drawBox(-80, 0, -40, 30, 20, 40, '#1E293B');
-
-        // Fuel Tanks (White/Silver Cylinders at Bottom Left)
-        for (var fk = 0; fk < 3; fk++) {
-          var fx = -70 + fk * 25;
-          var fz = 30;
-          var fp = project(fx, 0, fz);
-          ctx.fillStyle = '#E2E8F0';
-          ctx.beginPath();
-          ctx.ellipse(fp.x, fp.y - 15, 16, 8, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillRect(fp.x - 16, fp.y - 15, 32, 20);
-        }
-
-        // Gantry Cranes (Copper #D99B66)
-        for (var cr = 0; cr < 3; cr++) {
-          var cxPos = 30 + cr * 25;
-          var czPos = -40;
-          var cp = project(cxPos, 0, czPos);
-          ctx.strokeStyle = '#D99B66';
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.moveTo(cp.x - 12, cp.y); ctx.lineTo(cp.x - 6, cp.y - 45);
-          ctx.moveTo(cp.x + 12, cp.y); ctx.lineTo(cp.x + 6, cp.y - 45);
-          ctx.lineTo(cp.x - 20, cp.y - 45); ctx.lineTo(cp.x + 20, cp.y - 45);
-          ctx.stroke();
-        }
-
-        // Container Stacks
-        var cColors = ['#D99B66', '#2DD4BF', '#334155', '#38BDF8'];
-        for (var cx = 0; cx < 3; cx++) {
-          for (var cz = 0; cz < 4; cz++) {
-            var cColor = cColors[(cx + cz) % cColors.length];
-            drawBox(20 + cx * 12, 0, 0 + cz * 12, 10, 8, 10, cColor);
-          }
-        }
-
-        // Moving 3D Truck TRK-012 with Headlights
-        if (simPlaying) t += 1;
-        var truckPos = ((t * 2) % 240) - 120;
-        var tp = project(truckPos, 0, -10);
-
-        // Truck Cabin & Body
-        drawBox(truckPos, 0, -12, 12, 8, 6, '#2DD4BF');
-        drawBox(truckPos + 10, 0, -12, 4, 9, 6, '#D99B66');
-
-        // Headlights glow
-        ctx.fillStyle = '#FFFFFF';
-        ctx.shadowColor = '#FFFFFF';
-        ctx.shadowBlur = 12;
-        ctx.beginPath(); ctx.arc(tp.x + 15, tp.y - 6, 3, 0, Math.PI * 2); ctx.fill();
-        ctx.shadowBlur = 0;
-
         if (atlasCanvasMayRun(canvasId)) scheduledFrame = requestAnimationFrame(render);
       }
 
@@ -755,8 +630,10 @@ tailwind.config = {
     init3DCanvas('atlas-3d-canvas');
     init3DCanvas('atlas-3d-canvas-mini');
     init3DCanvas('atlas-3d-canvas-full');
+    window.__atlasCanvasControllers = atlasCanvasControllers;
     window.__atlasCanvasLoops.sync();
   </script>
+  <script type="module" src="/src/3d/bootstrap.js"></script>
 
 <section id="atlas-legacy-workspace" class="bg-obsidian min-h-screen flex flex-col justify-between text-slate-200 hidden" hidden aria-label="Legacy operations prototype">
 

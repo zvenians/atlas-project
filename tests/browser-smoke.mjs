@@ -6,11 +6,12 @@ import { resolve, extname } from 'node:path';
 
 const root = process.cwd();
 const mime = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8',
-  '.css':'text/css; charset=utf-8', '.json':'application/json; charset=utf-8' };
+  '.css':'text/css; charset=utf-8', '.json':'application/json; charset=utf-8', '.mjs':'text/javascript; charset=utf-8' };
 const server = createServer((req,res) => {
   const pathname = decodeURIComponent(new URL(req.url,'http://localhost').pathname);
   const path = resolve(root, '.' + (pathname === '/' ? '/index.html' : pathname));
-  if (!path.startsWith(root + '/') && path !== root) {
+  const nRoot = root.replace(/\\/g, '/'); const nPath = path.replace(/\\/g, '/');
+  if (!nPath.startsWith(nRoot + '/') && nPath !== nRoot) {
     res.writeHead(403); res.end('Forbidden'); return;
   }
   try {
@@ -59,9 +60,9 @@ try {
       await page.evaluate(()=>window.dispatchEvent(new Event('pageshow')));
       await page.waitForFunction(()=>window.__atlasCanvasLoops.getActiveLoopCount()===1);
       await page.evaluate(()=>window.setCamMode('chase'));
-      assert.match(await page.locator('#atlas-legacy-notice').innerText(),/not implemented/i,'camera mode discloses prototype limitation');
+      assert.match(await page.locator('#atlas-legacy-notice').innerText(),/chase/i,'camera mode switches to 3D chase tracking');
       await page.evaluate(()=>window.resetOrbit());
-      assert.match(await page.locator('#atlas-legacy-notice').innerText(),/not implemented/i,'resetOrbit discloses prototype limitation');
+      assert.match(await page.locator('#atlas-legacy-notice').innerText(),/reset/i,'resetOrbit restores 3D tactical perspective');
 
       await page.evaluate(()=>window.toggleSimPlay());
       assert.equal(await page.evaluate(()=>window.ATLAS_V21.sim.snapshot().status),'RUNNING','primary toggleSimPlay starts canonical engine');
