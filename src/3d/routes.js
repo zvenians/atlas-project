@@ -171,7 +171,12 @@ export const ROUTE_METADATA = {
     maxLat: -1.155
   },
   corridorCount: 10,
-  hubCount: 10
+  hubCount: 10,
+  roadGeometryModel: {
+    corridorWidthMeters: 14.0,
+    widthProvenance: 'Approximation: 2-lane divided logistics corridor with 3.5m travel lanes and 3.5m shoulders/curbs (approximated where OSM width tags are unmapped)',
+    markings: 'DOT/AASHTO standard: 3.2m white dashed divider, 0.24m solid fog lines at +/-5.5m, 1.4m concrete curbs at +/-6.5m, W-beam guardrails at +/-7.6m'
+  }
 };
 
 /**
@@ -179,9 +184,15 @@ export const ROUTE_METADATA = {
  * @param {Array<Array<number>>} waypoints
  * @returns {{ distances: number[], totalDistance: number }}
  */
+const _cumulativeDistCache = new WeakMap();
+
 export function computeCumulativeDistances(waypoints) {
   const n = waypoints ? waypoints.length : 0;
   if (n <= 1) return { distances: [0], totalDistance: 0 };
+  if (typeof waypoints === 'object') {
+    const cached = _cumulativeDistCache.get(waypoints);
+    if (cached) return cached;
+  }
   const distances = [0];
   let total = 0;
   for (let i = 0; i < n - 1; i++) {
@@ -193,7 +204,11 @@ export function computeCumulativeDistances(waypoints) {
     total += segDist;
     distances.push(total);
   }
-  return { distances, totalDistance: total };
+  const result = { distances, totalDistance: total };
+  if (typeof waypoints === 'object') {
+    _cumulativeDistCache.set(waypoints, result);
+  }
+  return result;
 }
 
 /**

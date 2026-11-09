@@ -833,25 +833,40 @@ export class Atlas3DEngine {
     if (!vr) return;
     const pos = interpolateRoute(vr.waypoints, this._routeProgressions[this.selectedVehicle]);
 
-    if (this.cameraMode === 'follow') {
-      this.map.jumpTo({
-        center: [pos.lng, pos.lat],
-        bearing: pos.bearing,
-        pitch: 58,
-        zoom: 18.2,
-      });
-    } else if (this.cameraMode === 'chase') {
-      const offsetDeg = 28 / 111139; // ~28m offset behind vehicle along heading
-      const bearingRad = (pos.bearing * Math.PI) / 180;
-      const chaseLng = pos.lng - Math.sin(bearingRad) * (offsetDeg / Math.cos(pos.lat * Math.PI / 180));
-      const chaseLat = pos.lat - Math.cos(bearingRad) * offsetDeg;
+    if (!this._lastCameraTrackingPose) {
+      this._lastCameraTrackingPose = { lng: 0, lat: 0, bearing: 0, mode: '' };
+    }
+    const last = this._lastCameraTrackingPose;
+    const dLng = Math.abs(pos.lng - last.lng);
+    const dLat = Math.abs(pos.lat - last.lat);
+    const dBearing = Math.abs(pos.bearing - last.bearing);
+    const modeChanged = this.cameraMode !== last.mode;
 
-      this.map.jumpTo({
-        center: [chaseLng, chaseLat],
-        bearing: pos.bearing,
-        pitch: 70,
-        zoom: 19.5,
-      });
+    if (modeChanged || dLng > 1e-6 || dLat > 1e-6 || dBearing > 0.05) {
+      if (this.cameraMode === 'follow') {
+        this.map.jumpTo({
+          center: [pos.lng, pos.lat],
+          bearing: pos.bearing,
+          pitch: 58,
+          zoom: 18.2,
+        });
+      } else if (this.cameraMode === 'chase') {
+        const offsetDeg = 28 / 111139; // ~28m offset behind vehicle along heading
+        const bearingRad = (pos.bearing * Math.PI) / 180;
+        const chaseLng = pos.lng - Math.sin(bearingRad) * (offsetDeg / Math.cos(pos.lat * Math.PI / 180));
+        const chaseLat = pos.lat - Math.cos(bearingRad) * offsetDeg;
+
+        this.map.jumpTo({
+          center: [chaseLng, chaseLat],
+          bearing: pos.bearing,
+          pitch: 70,
+          zoom: 19.5,
+        });
+      }
+      last.lng = pos.lng;
+      last.lat = pos.lat;
+      last.bearing = pos.bearing;
+      last.mode = this.cameraMode;
     }
     this._updateCalloutPosition(this.selectedVehicle);
   }
@@ -1258,16 +1273,26 @@ _updateCalloutPosition(index = this.selectedVehicle) {
    * Reports real measured values without fabricated fallbacks.
    */
   getRenderInfo() {
+    let rendererName = 'WebGL';
+    try {
+      const gl = this.renderer?.getContext?.();
+      const dbgRenderInfo = gl?.getExtension?.('WEBGL_debug_renderer_info');
+      if (dbgRenderInfo && gl) {
+        rendererName = gl.getParameter(dbgRenderInfo.UNMASKED_RENDERER_WEBGL) || 'WebGL';
+      }
+    } catch {}
     if (!this.renderer || !this._measuredCalls) {
       return {
         calls: null,
         triangles: null,
+        renderer: rendererName,
         available: false
       };
     }
     return {
       calls: this._measuredCalls,
       triangles: this._measuredTriangles,
+      renderer: rendererName,
       available: true
     };
   }
@@ -1362,6 +1387,11 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     const ambient = new THREE.AmbientLight(0x5A6B7C, 1.9);
     scene.add(ambient);
 
+    // Natural environmental sky and ground bounce illumination
+    const hemiLight = new THREE.HemisphereLight(0x38BDF8, 0x141C26, 0.95);
+    hemiLight.name = 'tracking-hemi-light';
+    scene.add(hemiLight);
+
     const sun = new THREE.DirectionalLight(0xFFF3E0, 2.5);
     sun.position.set(28, 42, 22);
     scene.add(sun);
@@ -1382,9 +1412,62 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     ground.position.y = -0.05;
     scene.add(ground);
 
+    // Realistic procedural asphalt texture with mineral grain noise and dual lane tire wear paths
+    let asphaltTexture = null;
+    if (typeof document !== 'undefined') {
+      try {
+        const texCanvas = document.createElement('canvas');
+        texCanvas.width = 512;
+        texCanvas.height = 512;
+        const ctx = texCanvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#181E24';
+          ctx.fillRect(0, 0, 512, 512);
+
+          // Mineral aggregate speckles
+          for (let i = 0; i < 16000; i++) {
+            const x = (Math.random() * 512) | 0;
+            const y = (Math.random() * 512) | 0;
+            const shade = ((Math.random() * 50) | 0) + 20;
+            ctx.fillStyle = `rgb(${shade},${shade + 2},${shade + 4})`;
+            ctx.fillRect(x, y, 1 + (Math.random() > 0.8 ? 1 : 0), 1 + (Math.random() > 0.8 ? 1 : 0));
+          }
+
+          // Dual lane tire wear tracks (lanes at ~28% and ~72% width)
+          const leftGrad = ctx.createLinearGradient(80, 0, 200, 0);
+          leftGrad.addColorStop(0, 'rgba(15, 19, 24, 0.0)');
+          leftGrad.addColorStop(0.3, 'rgba(15, 19, 24, 0.45)');
+          leftGrad.addColorStop(0.5, 'rgba(25, 30, 36, 0.2)');
+          leftGrad.addColorStop(0.7, 'rgba(15, 19, 24, 0.45)');
+          leftGrad.addColorStop(1, 'rgba(15, 19, 24, 0.0)');
+          ctx.fillStyle = leftGrad;
+          ctx.fillRect(80, 0, 120, 512);
+
+          const rightGrad = ctx.createLinearGradient(312, 0, 432, 0);
+          rightGrad.addColorStop(0, 'rgba(15, 19, 24, 0.0)');
+          rightGrad.addColorStop(0.3, 'rgba(15, 19, 24, 0.45)');
+          rightGrad.addColorStop(0.5, 'rgba(25, 30, 36, 0.2)');
+          rightGrad.addColorStop(0.7, 'rgba(15, 19, 24, 0.45)');
+          rightGrad.addColorStop(1, 'rgba(15, 19, 24, 0.0)');
+          ctx.fillStyle = rightGrad;
+          ctx.fillRect(312, 0, 120, 512);
+
+          asphaltTexture = new THREE.CanvasTexture(texCanvas);
+          asphaltTexture.wrapS = THREE.RepeatWrapping;
+          asphaltTexture.wrapT = THREE.RepeatWrapping;
+          asphaltTexture.repeat.set(1, 16);
+        }
+      } catch {}
+    }
+
     // Cached PBR materials for route-derived corridor
     this._trackingMaterials = {
-      road: new THREE.MeshStandardMaterial({ color: 0x1B2127, roughness: 0.82, metalness: 0.18 }),
+      road: new THREE.MeshStandardMaterial({
+        color: 0x1E252D,
+        map: asphaltTexture || null,
+        roughness: 0.85,
+        metalness: 0.15
+      }),
       dash: new THREE.MeshBasicMaterial({ color: 0xF1F5F9 }),
       fogLine: new THREE.MeshBasicMaterial({ color: 0xE2E8F0 }),
       curb: new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9 }),
@@ -1590,7 +1673,7 @@ _updateCalloutPosition(index = this.selectedVehicle) {
    * Updates dynamically extruded 3D curved road ribbon along the active route corridor.
    * Leverages pre-allocated GPU buffer pools for zero per-frame rebuilding and zero GC pressure.
    */
-  _updateCurvedRoadGeometry(THREE, samples, travelMeters) {
+  _updateCurvedRoadGeometry(THREE, samples, travelMeters, vr = null) {
     if (!this._trackingRoadGroup || !samples || samples.length < 2) return;
     const geos = this._trackingGeos;
     if (!geos) return;
@@ -1705,15 +1788,30 @@ _updateCalloutPosition(index = this.selectedVehicle) {
       this._trackingPolePool[lp].visible = false;
     }
 
-    // 8. Industrial Warehouses / Container Yards / Port Cranes from Pool
+    // 8. Context-Aware Grounded Scenery from Pre-Allocated Pool
+    // Port Cranes & Container Stacks on maritime corridors; Warehouses on freight corridors
+    const fromName = vr?.from?.toLowerCase?.() || '';
+    const toName = vr?.to?.toLowerCase?.() || '';
+    const isPortCorridor = fromName.includes('kariangau') || fromName.includes('semayang') || fromName.includes('kampung_baru') ||
+                           toName.includes('kariangau') || toName.includes('semayang') || toName.includes('kampung_baru');
+
     let scIdx = 0;
-    for (let i = 2; i < numSamples; i += 15) {
+    for (let i = 2; i < numSamples; i += 16) {
       if (scIdx < this._trackingSceneryPool.length) {
         const s = samples[i];
-        const side = (i % 30 === 2) ? -32 : 32;
-        const scGroup = this._trackingSceneryPool[scIdx++];
-        scGroup.position.set(s.x + s.nx * side, 0, s.z + s.nz * side);
-        scGroup.visible = true;
+        const side = (i % 32 === 2) ? -34 : 34;
+        // Prioritize pool item based on corridor context
+        let poolIndex = scIdx;
+        if (!isPortCorridor && poolIndex % 3 !== 0) {
+          // Freight corridor: select warehouse variants (indices with mod 3 == 0)
+          poolIndex = (scIdx * 3) % this._trackingSceneryPool.length;
+        }
+        const scGroup = this._trackingSceneryPool[poolIndex];
+        if (scGroup) {
+          scGroup.position.set(s.x + s.nx * side, 0, s.z + s.nz * side);
+          scGroup.visible = true;
+        }
+        scIdx++;
       }
     }
     for (let sc = scIdx; sc < this._trackingSceneryPool.length; sc++) {
@@ -1781,7 +1879,7 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     this._lastRouteWindow = windowData;
 
     // Update dynamically extruded 3D curved road ribbon
-    this._updateCurvedRoadGeometry(THREE, windowData.samples, pos.travelMeters || pos.distanceMeters);
+    this._updateCurvedRoadGeometry(THREE, windowData.samples, pos.travelMeters || pos.distanceMeters, vr);
 
     // Apply Camera Framing based on mode (Follow vs Chase)
     const isMobile = aspect < 1.0;
@@ -1818,7 +1916,7 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     // Update Top-left badge to Option B provenance
     const geoBadge = document.getElementById('map-geo-badge');
     if (geoBadge) {
-      geoBadge.textContent = 'LIVE GEOGRAPHY • BALIKPAPAN | ROUTE-DERIVED 3D VIEW';
+      geoBadge.textContent = 'LIVE GEOGRAPHY • BALIKPAPAN | ROUTE-DERIVED 3D VIEW (SIMULATED SCENIC ASSETS)';
     }
 
     // Synchronize underlying MapLibre camera without causing digital zoom blur
@@ -1930,8 +2028,12 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     const svgPath = document.getElementById('mini-map-route-path');
     const dot = document.getElementById('mini-map-vehicle-dot');
     if (vr?.waypoints && vr.waypoints.length > 1) {
-      const proj = this.projectRouteToMiniMap(vr.waypoints);
-      if (svgPath) svgPath.setAttribute('d', proj.d);
+      if (this._lastMiniMapIndex !== index || !this._lastMiniMapProj) {
+        const proj = this.projectRouteToMiniMap(vr.waypoints);
+        if (svgPath) svgPath.setAttribute('d', proj.d);
+        this._lastMiniMapProj = proj;
+        this._lastMiniMapIndex = index;
+      }
 
       if (dot && pos?.lng !== undefined && pos?.lat !== undefined) {
         const pt = this.projectPointToMiniMap(pos.lng, pos.lat, vr.waypoints);

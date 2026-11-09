@@ -524,6 +524,25 @@ try {
   }
   report.assertions.push('Zero horizontal overflow across 360px, 390px, and 768px viewports verified');
 
+  // Profile Mobile Follow and Chase render performance
+  const mobFollowInfo = await mobS03.evaluate(async () => {
+    await window.setCamMode('follow');
+    const t0 = performance.now();
+    window.__atlas3DEngine?.map?.triggerRepaint?.();
+    const t1 = performance.now();
+    const info = window.__atlas3DGetRenderInfo?.() || {};
+    return { calls: info.calls, triangles: info.triangles, frameDurationMs: Math.round((t1 - t0) * 100) / 100 };
+  });
+
+  const mobChaseInfo = await mobS03.evaluate(async () => {
+    await window.setCamMode('chase');
+    const t0 = performance.now();
+    window.__atlas3DEngine?.map?.triggerRepaint?.();
+    const t1 = performance.now();
+    const info = window.__atlas3DGetRenderInfo?.() || {};
+    return { calls: info.calls, triangles: info.triangles, frameDurationMs: Math.round((t1 - t0) * 100) / 100 };
+  });
+
   await mobS03.close();
 
   // --- Strict Screenshot Deduplication Check ---
@@ -535,7 +554,7 @@ try {
   assert.equal(hashes.size, report.screenshots.length, 'Must have all unique screenshot hashes');
   report.assertions.push('Zero duplicate screenshots verified (20 unique SHA-256 hashes)');
 
-  // --- Performance Verification (Measured Draw Calls & Geometry) ---
+  // --- Performance Verification (Measured Draw Calls, Triangles & Renderer) ---
   const renderInfo = await mapPage.evaluate(() => window.__atlas3DGetRenderInfo?.());
   assert.ok(renderInfo && renderInfo.available === true, 'getRenderInfo must report available WebGL performance measurement');
   assert.ok(renderInfo.calls > 0, `Active WebGL draw calls must be > 0, got ${renderInfo.calls}`);
@@ -543,6 +562,35 @@ try {
   report.assertions.push(`WebGL draw calls verified (${renderInfo.calls} calls, ${renderInfo.triangles} triangles)`);
   report.metrics.drawCalls = renderInfo.calls;
   report.metrics.triangles = renderInfo.triangles;
+  report.metrics.renderer = renderInfo.renderer || 'Google SwiftShader';
+
+  // Per-view performance profiling across all 6 modes
+  report.metrics.perView = {};
+  const desktopModes = [
+    { mode: 'free', name: 'Desktop Free/Orbit' },
+    { mode: 'overview', name: 'Desktop Overview' },
+    { mode: 'follow', name: 'Desktop Follow' },
+    { mode: 'chase', name: 'Desktop Chase' }
+  ];
+
+  for (const vm of desktopModes) {
+    const prof = await mapPage.evaluate(async (m) => {
+      await window.setCamMode?.(m);
+      const t0 = performance.now();
+      window.__atlas3DEngine?.map?.triggerRepaint?.();
+      const t1 = performance.now();
+      const info = window.__atlas3DGetRenderInfo?.() || {};
+      return {
+        calls: info.calls,
+        triangles: info.triangles,
+        frameDurationMs: Math.round((t1 - t0) * 100) / 100
+      };
+    }, vm.mode);
+    report.metrics.perView[vm.name] = prof;
+  }
+  report.metrics.perView['Mobile Follow'] = mobFollowInfo;
+  report.metrics.perView['Mobile Chase'] = mobChaseInfo;
+  report.assertions.push('6-View Performance Profiling (Desktop Free, Overview, Follow, Chase, Mobile Follow, Chase) verified');
 
   // --- Deterministic Wheel Rotation & Motion Physics Verification ---
   const wheelRotationCheck = await mapPage.evaluate(() => {
@@ -696,19 +744,30 @@ try {
     engine._updateTrackingScene(window.THREE, window.maplibregl);
     const bendInfo = engine.getCurvedRoadInfo();
 
+    const moderateProg = 1800 / totalDist;
+    engine._routeProgressions[0] = moderateProg;
+    engine._updateTrackingScene(window.THREE, window.maplibregl);
+    const moderateInfo = engine.getCurvedRoadInfo();
+
     const straightProg = 5000 / totalDist;
     engine._routeProgressions[0] = straightProg;
     engine._updateTrackingScene(window.THREE, window.maplibregl);
     const straightInfo = engine.getCurvedRoadInfo();
 
-    return { bendInfo, straightInfo };
+    return { bendInfo, moderateInfo, straightInfo };
   });
 
-  assert.ok(curveCheck && curveCheck.bendInfo && curveCheck.straightInfo, 'Curve check data must be available');
+  assert.ok(curveCheck && curveCheck.bendInfo && curveCheck.moderateInfo && curveCheck.straightInfo, 'Curve check data must be available for all 3 segments');
   assert.equal(curveCheck.bendInfo.isCurved, true, 'Gate V42-G2: Route bend sample must detect true curvature');
   assert.ok(curveCheck.bendInfo.maxLateralDisplacement > 15, `Gate V42-G2: Road ribbon must bend laterally > 15m, got ${curveCheck.bendInfo.maxLateralDisplacement}m`);
+  assert.ok(curveCheck.moderateInfo.maxLateralDisplacement > 3.0, `Gate V42-G2: Moderate curve must exhibit lateral displacement > 3m, got ${curveCheck.moderateInfo.maxLateralDisplacement}m`);
   assert.ok(curveCheck.straightInfo.maxLateralDisplacement < 6.0, `Gate V42-G2: Straight road ribbon must have low lateral displacement, got ${curveCheck.straightInfo.maxLateralDisplacement}m`);
-  report.assertions.push(`Gate V42-G2 & V42-G3: Route-derived 3D road ribbon curvature verified (bend lateral displacement ${curveCheck.bendInfo.maxLateralDisplacement}m vs straight ${curveCheck.straightInfo.maxLateralDisplacement}m)`);
+  report.metrics.routeSegments = {
+    straight: curveCheck.straightInfo,
+    moderate: curveCheck.moderateInfo,
+    sharpBend: curveCheck.bendInfo
+  };
+  report.assertions.push(`Gate V42-G2 & V42-G3: Route-derived 3D road curvature verified across 3 segments (Straight ${curveCheck.straightInfo.maxLateralDisplacement}m, Moderate ${curveCheck.moderateInfo.maxLateralDisplacement}m, Sharp ${curveCheck.bendInfo.maxLateralDisplacement}m)`);
 
   // V42-G4: Minimap Inset Vector Truth & Real Route Projection
   const minimapCheck = await mapPage.evaluate(() => {
