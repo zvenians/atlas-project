@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { VEHICLE_TYPES, createFleet, createTruckMesh } from '../src/3d/vehicles.js';
-import { HUBS, ROUTES, assignVehicleRoutes, interpolateRoute, routesToGeoJSON, hubsToGeoJSON } from '../src/3d/routes.js';
+import { HUBS, ROUTES, assignVehicleRoutes, interpolateRoute, routesToGeoJSON, hubsToGeoJSON, ROUTE_METADATA, computeCumulativeDistances, getRouteSample, transformToLocalFrame, getRouteWindow } from '../src/3d/routes.js';
 import { geoTo3D } from '../src/3d/map3d.js';
 import * as THREE from '../src/vendor/three.module.js';
 
@@ -91,4 +91,97 @@ test('3D GeoJSON: routesToGeoJSON and hubsToGeoJSON produce valid RFC-7946 featu
   assert.equal(hGeo.type, 'FeatureCollection');
   assert.equal(hGeo.features.length, 10);
   assert.equal(hGeo.features[0].geometry.type, 'Point');
+});
+
+test('3D Route Metadata: ODbL license, OSM provider and valid Balikpapan bounds', () => {
+  assert.ok(ROUTE_METADATA.provider.includes('OpenStreetMap'));
+  assert.ok(ROUTE_METADATA.license.includes('ODbL'));
+  assert.equal(ROUTE_METADATA.corridorCount, 10);
+  assert.equal(ROUTE_METADATA.hubCount, 10);
+  assert.ok(ROUTE_METADATA.geographicBounds.minLng < ROUTE_METADATA.geographicBounds.maxLng);
+  assert.ok(ROUTE_METADATA.geographicBounds.minLat < ROUTE_METADATA.geographicBounds.maxLat);
+});
+
+test('3D Arc-Length Math: computeCumulativeDistances is strictly monotonic', () => {
+  const waypoints = ROUTES[0].waypoints;
+  const { distances, totalDistance } = computeCumulativeDistances(waypoints);
+  assert.equal(distances[0], 0);
+  assert.equal(distances.length, waypoints.length);
+  for (let i = 1; i < distances.length; i++) {
+    assert.ok(distances[i] > distances[i - 1], `Distance at ${i} must be greater than ${i-1}`);
+  }
+  assert.equal(distances[distances.length - 1], totalDistance);
+  assert.ok(totalDistance > 10000, 'Route 0 is > 10km');
+});
+
+test('3D Single Authoritative Route Sample: getRouteSample contract & tangent/normal orthogonality', () => {
+  const waypoints = ROUTES[0].waypoints;
+  const s0 = getRouteSample(waypoints, 0);
+  assert.equal(s0.distanceMeters, 0);
+  assert.equal(s0.progress, 0);
+  assert.equal(s0.lng, waypoints[0][0]);
+  assert.equal(s0.lat, waypoints[0][1]);
+  assert.ok(s0.headingDegrees >= 0 && s0.headingDegrees <= 360);
+
+  // Tangent unit length
+  const tanLen = Math.hypot(s0.tangent[0], s0.tangent[1]);
+  assert.ok(Math.abs(tanLen - 1) < 0.001, 'Tangent must be a unit vector');
+
+  // Normal orthogonality: dot product tangent . normal == 0
+  const dot = s0.tangent[0] * s0.normal[0] + s0.tangent[1] * s0.normal[1];
+  assert.ok(Math.abs(dot) < 0.001, 'Normal must be orthogonal to tangent');
+
+  // Arbitrary distance sample
+  const sMid = getRouteSample(waypoints, 2500, { isDistance: true });
+  assert.equal(sMid.distanceMeters, 2500);
+  assert.ok(sMid.progress > 0 && sMid.progress < 1);
+  assert.ok(sMid.speedMetersPerSecond > 0);
+});
+
+test('3D Metric Frame: transformToLocalFrame origin and axis orientation', () => {
+  const origin = [116.8200, -1.2200];
+  const heading = 45; // 45 degrees NE
+
+  // Origin projects to (0, 0)
+  const atOrigin = transformToLocalFrame(origin, origin, heading);
+  assert.equal(Math.round(atOrigin.x * 1000), 0);
+  assert.equal(Math.round(atOrigin.z * 1000), 0);
+
+  // Point ahead along heading (distance ~ 100m)
+  // At heading 45 deg, dEast = 100 * sin(45) = 70.71m, dNorth = 100 * cos(45) = 70.71m
+  const cosLat = Math.cos(origin[1] * Math.PI / 180);
+  const ptAhead = [
+    origin[0] + (70.7107 / (111320 * cosLat)),
+    origin[1] + (70.7107 / 111320)
+  ];
+  const atAhead = transformToLocalFrame(ptAhead, origin, heading);
+  assert.ok(Math.abs(atAhead.x) < 0.1, `Lateral offset must be ~0, got ${atAhead.x}`);
+  assert.ok(Math.abs(atAhead.z - 100) < 0.2, `Forward offset must be ~100m, got ${atAhead.z}`);
+
+  // Point to the right lateral normal (heading + 90 = 135 deg SE, distance ~ 50m)
+  const ptRight = [
+    origin[0] + (50 * Math.cos(45 * Math.PI / 180) / (111320 * cosLat)),
+    origin[1] - (50 * Math.sin(45 * Math.PI / 180) / 111320)
+  ];
+  const atRight = transformToLocalFrame(ptRight, origin, heading);
+  assert.ok(Math.abs(atRight.x - 50) < 0.2, `Right lateral offset must be ~50m, got ${atRight.x}`);
+  assert.ok(Math.abs(atRight.z) < 0.1, `Forward offset must be ~0, got ${atRight.z}`);
+});
+
+test('3D Route Window: getRouteWindow samples curved vs straight geometry', () => {
+  const waypoints = ROUTES[0].waypoints;
+
+  // Window at known curved bend on Route 0 (cum ~ 1276m)
+  const winCurve = getRouteWindow(waypoints, 1276, 50, 100, 5);
+  assert.ok(winCurve.samples.length > 20, 'Curved window must have multiple samples');
+  assert.equal(winCurve.samples.find(s => Math.abs(s.sLocal) < 0.001)?.x, 0, 'Center sample x is 0');
+  
+  // Verify that road curves (lateral displacement |x| exceeds 15m along the window)
+  const maxLateralCurve = Math.max(...winCurve.samples.map(s => Math.abs(s.x)));
+  assert.ok(maxLateralCurve > 15, `Road must visibly curve: expected max lateral > 15m, got ${maxLateralCurve}m`);
+
+  // Window at straight corridor (cum ~ 5000m)
+  const winStraight = getRouteWindow(waypoints, 5000, 50, 100, 5);
+  const maxLateralStraight = Math.max(...winStraight.samples.map(s => Math.abs(s.x)));
+  assert.ok(maxLateralStraight < 5.0, `Straight road must have low lateral displacement, got ${maxLateralStraight}m`);
 });

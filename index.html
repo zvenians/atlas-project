@@ -497,22 +497,20 @@ window.tailwind.config = {
           <!-- OPTION B: SYNCHRONIZED CONTEXT MINI-MAP INSET (BOTTOM-LEFT OF MAP CARD) -->
           <div id="context-mini-map" style="display: none;" class="absolute bottom-7 left-3 z-20 bg-[#151B22]/95 border border-[#39464F] rounded-lg p-2.5 w-44 sm:w-48 shadow-2xl text-xs font-mono flex flex-col gap-1.5 select-none">
             <div class="flex items-center justify-between text-[10px] font-bold text-[#65C9B6]">
-              <span>CONTEXT MINI-MAP</span>
+              <span id="mini-map-badge-title">GEO-DERIVED ROUTE DIAGRAM</span>
               <span id="mini-map-id">TRK-004</span>
             </div>
             <div class="relative w-full h-14 bg-[#112A30] rounded border border-[#39464F]/60 overflow-hidden">
               <svg id="mini-map-svg" viewBox="0 0 160 56" class="w-full h-full">
-                <!-- Balikpapan Bay Shoreline schematic -->
-                <path d="M 0,12 Q 35,22 65,16 T 125,26 L 160,32" fill="none" stroke="#2A4750" stroke-width="2.5"/>
-                <!-- Highway Route -->
-                <path id="mini-map-route-path" d="M 15,44 L 45,30 L 85,34 L 140,16" fill="none" stroke="#2DD4BF" stroke-width="3" stroke-linecap="round"/>
-                <!-- Live Vehicle Dot -->
-                <circle id="mini-map-vehicle-dot" cx="85" cy="34" r="4.5" fill="#DCA876" stroke="#FFFFFF" stroke-width="1.5"/>
+                <!-- Highway Route Path (dynamically updated from verified GeoJSON waypoints) -->
+                <path id="mini-map-route-path" d="" fill="none" stroke="#2DD4BF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <!-- Live Vehicle Dot (exact projected WGS84 coordinate) -->
+                <circle id="mini-map-vehicle-dot" cx="80" cy="28" r="4.5" fill="#DCA876" stroke="#FFFFFF" stroke-width="1.5"/>
               </svg>
             </div>
             <div class="flex items-center justify-between text-[9px] text-[#A4B5BC]">
               <span id="mini-map-route-name" class="truncate">Kariangau Corridor</span>
-              <span class="text-[#65C9B6] font-bold">LIVE SYNC</span>
+              <span class="text-[#65C9B6] font-bold">OSM LIVE SYNC</span>
             </div>
           </div>
 

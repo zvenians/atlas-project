@@ -678,6 +678,98 @@ try {
   assert.equal(negativeMutationTest.afterInScene, true, 'Restored scene correctly detects vehicle 3 restored');
   report.assertions.push('Negative Control 6: Real 3D scene layer mutation correctly caught (isolated removal/restoration test)');
 
+  // --- V4.2 GATE VERIFICATIONS & NEGATIVE CONTROLS ---
+
+  // V42-G2 / V42-G3: Route-Derived 3D Road Curvature Verification
+  const curveCheck = await mapPage.evaluate(async () => {
+    const engine = window.__atlas3DEngine;
+    if (!engine) return null;
+    window.selectMapVehicle(0);
+    await window.setCamMode('follow');
+
+    const totalDist = engine.getVehicleRouteSample(0, 0).totalDistanceMeters;
+    const bendProg = 1276 / totalDist;
+    engine._routeProgressions[0] = bendProg;
+    engine._updateTrackingScene(window.THREE, window.maplibregl);
+    const bendInfo = engine.getCurvedRoadInfo();
+
+    const straightProg = 5000 / totalDist;
+    engine._routeProgressions[0] = straightProg;
+    engine._updateTrackingScene(window.THREE, window.maplibregl);
+    const straightInfo = engine.getCurvedRoadInfo();
+
+    return { bendInfo, straightInfo };
+  });
+
+  assert.ok(curveCheck && curveCheck.bendInfo && curveCheck.straightInfo, 'Curve check data must be available');
+  assert.equal(curveCheck.bendInfo.isCurved, true, 'Gate V42-G2: Route bend sample must detect true curvature');
+  assert.ok(curveCheck.bendInfo.maxLateralDisplacement > 15, `Gate V42-G2: Road ribbon must bend laterally > 15m, got ${curveCheck.bendInfo.maxLateralDisplacement}m`);
+  assert.ok(curveCheck.straightInfo.maxLateralDisplacement < 6.0, `Gate V42-G2: Straight road ribbon must have low lateral displacement, got ${curveCheck.straightInfo.maxLateralDisplacement}m`);
+  report.assertions.push(`Gate V42-G2 & V42-G3: Route-derived 3D road ribbon curvature verified (bend lateral displacement ${curveCheck.bendInfo.maxLateralDisplacement}m vs straight ${curveCheck.straightInfo.maxLateralDisplacement}m)`);
+
+  // V42-G4: Minimap Inset Vector Truth & Real Route Projection
+  const minimapCheck = await mapPage.evaluate(() => {
+    const engine = window.__atlas3DEngine;
+    const vr = engine?.vehicleRoutes?.[0];
+    const prog = engine?._routeProgressions?.[0] || 0;
+    const sample = engine?.getVehicleRouteSample?.(0, prog);
+
+    const svgPath = document.getElementById('mini-map-route-path')?.getAttribute('d');
+    const dotCx = parseFloat(document.getElementById('mini-map-vehicle-dot')?.getAttribute('cx'));
+    const dotCy = parseFloat(document.getElementById('mini-map-vehicle-dot')?.getAttribute('cy'));
+    const badgeTitle = document.getElementById('mini-map-badge-title')?.innerText;
+
+    const proj = engine?.projectPointToMiniMap?.(sample.lng, sample.lat, vr.waypoints);
+    return { svgPath, dotCx, dotCy, badgeTitle, proj };
+  });
+
+  assert.ok(minimapCheck.svgPath && minimapCheck.svgPath.startsWith('M'), 'Minimap route path must be a valid SVG polyline');
+  assert.equal(minimapCheck.badgeTitle, 'GEO-DERIVED ROUTE DIAGRAM', 'Minimap badge title must reflect geo-derived truth');
+  assert.ok(minimapCheck.proj?.onRoute, `Gate V42-G4: Vehicle dot must lie on projected route, dist=${minimapCheck.proj?.minDistanceToPath}px`);
+  assert.ok(minimapCheck.proj?.minDistanceToPath < 2.0, `Gate V42-G4: Distance from dot to polyline must be < 2px, got ${minimapCheck.proj?.minDistanceToPath}px`);
+  report.assertions.push('Gate V42-G4: Context Mini-Map geo-derived vector truth & live sync verified');
+
+  // NEGATIVE CONTROL 7: Unrelated Coordinate Rejection in Context Mini-Map
+  const negativeMinimap = await mapPage.evaluate(() => {
+    const engine = window.__atlas3DEngine;
+    const vr = engine?.vehicleRoutes?.[0];
+    return engine?.projectPointToMiniMap?.(106.8456, -6.2088, vr.waypoints);
+  });
+  assert.equal(negativeMinimap.onRoute, false, 'Negative control 7: Unrelated Jakarta coordinates must NOT be marked onRoute');
+  assert.ok(negativeMinimap.minDistanceToPath > 50, `Negative control 7: Distance to route must be large (> 50px), got ${negativeMinimap.minDistanceToPath}px`);
+  report.assertions.push('Negative Control 7: Unrelated geographic coordinates rejected by Context Mini-Map');
+
+  // NEGATIVE CONTROL 8: Detached Tracking Model BBox Fail-Closed Check (Zero Fake 16% Fallback)
+  const negativeBbox = await mapPage.evaluate(() => {
+    const engine = window.__atlas3DEngine;
+    if (!engine || !engine._trackingTruckGroup) return null;
+
+    const beforeBbox = engine.getScreenBoundingBox();
+
+    const removedChildren = [];
+    while (engine._trackingTruckGroup.children.length > 0) {
+      const child = engine._trackingTruckGroup.children[0];
+      removedChildren.push(child);
+      engine._trackingTruckGroup.remove(child);
+    }
+
+    const duringBbox = engine.getScreenBoundingBox();
+
+    for (const child of removedChildren) {
+      engine._trackingTruckGroup.add(child);
+    }
+    const afterBbox = engine.getScreenBoundingBox();
+
+    return { beforeBbox, duringBbox, afterBbox };
+  });
+
+  assert.ok(negativeBbox, 'Negative control 8 test data must be valid');
+  assert.equal(negativeBbox.beforeBbox.available, true, 'Normal model reports available BBox');
+  assert.equal(negativeBbox.duringBbox.available, false, 'Gate V42-G7 / Neg Control 8: Empty/missing model must fail-closed with available: false');
+  assert.equal(negativeBbox.duringBbox.width, 0, 'Gate V42-G7 / Neg Control 8: Must NOT return synthetic 16% width fallback');
+  assert.equal(negativeBbox.afterBbox.available, true, 'Restored model reports available BBox');
+  report.assertions.push('Gate V42-G7 & Negative Control 8: Fail-closed honest bounding box verified (zero synthetic 16% fallback)');
+
   await mapPage.close();
 
   console.log(`ATLAS 3D QA SUITE PASS: ${report.screenshots.length} screenshots captured, ${report.assertions.length} assertions passed, ${report.errors.length} page errors.`);

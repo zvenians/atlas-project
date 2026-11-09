@@ -4,7 +4,7 @@
 // Copyright © 2026 Kevin Oloan Simatupang. All rights reserved.
 
 import { createFleet, loadHeroGLBTruck, VEHICLE_TYPES } from './vehicles.js';
-import { HUBS, assignVehicleRoutes, interpolateRoute, routesToGeoJSON, hubsToGeoJSON } from './routes.js';
+import { HUBS, assignVehicleRoutes, interpolateRoute, routesToGeoJSON, hubsToGeoJSON, getRouteSample, getRouteWindow, transformToLocalFrame, ROUTE_METADATA } from './routes.js';
 
 /**
  * FLEET_DATA payload definitions for driver cards and telemetry.
@@ -1349,9 +1349,9 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     return this._routeProgressions[index] || 0;
   }
   /**
-   * Option B: Initializes dedicated high-detail 3D tracking scene for Follow and Chase modes.
-   * Renders physically credible asphalt highway corridor, lane markings, guardrails,
-   * street lighting, and distant industrial port silhouettes.
+   * Initializes dedicated high-detail 3D tracking scene for Follow and Chase modes.
+   * Renders route-derived curved 3D asphalt ribbon, real road curvature,
+   * center dashes, fog lines, concrete curbs, guardrails, and lighting poles.
    */
   _initTrackingScene(THREE) {
     if (this._trackingScene) return;
@@ -1370,7 +1370,7 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     fillLight.position.set(-22, 18, -14);
     scene.add(fillLight);
 
-    // Ground plane
+    // Large ground plane (240x240m)
     const groundGeo = new THREE.PlaneGeometry(240, 240);
     const groundMat = new THREE.MeshStandardMaterial({
       color: 0x0E141B,
@@ -1382,103 +1382,26 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     ground.position.y = -0.05;
     scene.add(ground);
 
-    // Asphalt highway road corridor (14m wide, 200m long)
-    const roadGeo = new THREE.PlaneGeometry(14, 200);
-    const roadMat = new THREE.MeshStandardMaterial({
-      color: 0x1B2127,
-      roughness: 0.82,
-      metalness: 0.18
-    });
-    const road = new THREE.Mesh(roadGeo, roadMat);
-    road.rotation.x = -Math.PI / 2;
-    road.position.set(0, 0, 0);
-    scene.add(road);
+    // Cached PBR materials for route-derived corridor
+    this._trackingMaterials = {
+      road: new THREE.MeshStandardMaterial({ color: 0x1B2127, roughness: 0.82, metalness: 0.18 }),
+      dash: new THREE.MeshBasicMaterial({ color: 0xF1F5F9 }),
+      fogLine: new THREE.MeshBasicMaterial({ color: 0xE2E8F0 }),
+      curb: new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9 }),
+      guardrail: new THREE.MeshStandardMaterial({ color: 0x94A3B8, metalness: 0.85, roughness: 0.25 }),
+      lampPole: new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.7, roughness: 0.3 }),
+      lampHead: new THREE.MeshStandardMaterial({ color: 0xCBD5E1, emissive: 0x2DD4BF, emissiveIntensity: 0.3 }),
+      warehouse: [
+        new THREE.MeshStandardMaterial({ color: 0x1E293B, roughness: 0.85, metalness: 0.25 }),
+        new THREE.MeshStandardMaterial({ color: 0x263142, roughness: 0.85, metalness: 0.25 }),
+        new THREE.MeshStandardMaterial({ color: 0x1B2636, roughness: 0.85, metalness: 0.25 })
+      ]
+    };
 
-    // Center dashed lane markings
-    this._trackingDashGroup = new THREE.Group();
-    this._trackingDashGroup.name = 'tracking-dash-group';
-    for (let z = -90; z <= 90; z += 6) {
-      const dashGeo = new THREE.PlaneGeometry(0.22, 3.2);
-      const dashMat = new THREE.MeshBasicMaterial({ color: 0xF1F5F9 });
-      const dash = new THREE.Mesh(dashGeo, dashMat);
-      dash.rotation.x = -Math.PI / 2;
-      dash.position.set(0, 0.015, z);
-      this._trackingDashGroup.add(dash);
-    }
-    scene.add(this._trackingDashGroup);
-
-    // Solid outer edge fog lines
-    for (const edgeX of [-5.5, 5.5]) {
-      const edgeGeo = new THREE.PlaneGeometry(0.24, 200);
-      const edgeMat = new THREE.MeshBasicMaterial({ color: 0xE2E8F0 });
-      const edgeLine = new THREE.Mesh(edgeGeo, edgeMat);
-      edgeLine.rotation.x = -Math.PI / 2;
-      edgeLine.position.set(edgeX, 0.015, 0);
-      scene.add(edgeLine);
-    }
-
-    // Concrete road curbs/shoulders
-    for (const curbX of [-6.5, 6.5]) {
-      const curbGeo = new THREE.BoxGeometry(1.6, 0.14, 200);
-      const curbMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9 });
-      const curb = new THREE.Mesh(curbGeo, curbMat);
-      curb.position.set(curbX, 0.07, 0);
-      scene.add(curb);
-    }
-
-    // Steel highway guardrails
-    for (const railX of [-7.6, 7.6]) {
-      const postGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.8, 8);
-      const steelMat = new THREE.MeshStandardMaterial({ color: 0x94A3B8, metalness: 0.85, roughness: 0.25 });
-      for (let pz = -90; pz <= 90; pz += 6) {
-        const post = new THREE.Mesh(postGeo, steelMat);
-        post.position.set(railX, 0.4, pz);
-        scene.add(post);
-      }
-      const wBeamGeo = new THREE.BoxGeometry(0.12, 0.35, 200);
-      const beam = new THREE.Mesh(wBeamGeo, steelMat);
-      beam.position.set(railX, 0.55, 0);
-      scene.add(beam);
-    }
-
-    // Modern highway LED lighting poles along right shoulder (spaced every 28m)
-    for (let lz = -84; lz <= 84; lz += 28) {
-      const poleGroup = new THREE.Group();
-      poleGroup.position.set(9.0, 0, lz);
-      const poleGeo = new THREE.CylinderGeometry(0.1, 0.14, 8.5, 8);
-      const poleMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.7, roughness: 0.3 });
-      const pole = new THREE.Mesh(poleGeo, poleMat);
-      pole.position.y = 4.25;
-      poleGroup.add(pole);
-
-      const armGeo = new THREE.BoxGeometry(2.2, 0.08, 0.08);
-      const arm = new THREE.Mesh(armGeo, poleMat);
-      arm.position.set(-0.8, 8.5, 0);
-      poleGroup.add(arm);
-
-      const lampGeo = new THREE.BoxGeometry(0.6, 0.12, 0.25);
-      const lampMat = new THREE.MeshStandardMaterial({ color: 0xCBD5E1, emissive: 0x2DD4BF, emissiveIntensity: 0.3 });
-      const lamp = new THREE.Mesh(lampGeo, lampMat);
-      lamp.position.set(-1.8, 8.44, 0);
-      poleGroup.add(lamp);
-
-      scene.add(poleGroup);
-    }
-
-    // Distant Industrial Port Silhouettes (warehouses & container stacks off the highway)
-    const indusColors = [0x1E293B, 0x263142, 0x1B2636];
-    for (let b = 0; b < 6; b++) {
-      const side = (b % 2 === 0) ? -1 : 1;
-      const bGeo = new THREE.BoxGeometry(20, 10, 32);
-      const bMat = new THREE.MeshStandardMaterial({
-        color: indusColors[b % indusColors.length],
-        roughness: 0.85,
-        metalness: 0.25
-      });
-      const wh = new THREE.Mesh(bGeo, bMat);
-      wh.position.set(side * 30, 5.0, -75 + b * 30);
-      scene.add(wh);
-    }
+    // Dynamic Road Ribbon Group (updated with real route curvature)
+    this._trackingRoadGroup = new THREE.Group();
+    this._trackingRoadGroup.name = 'tracking-curved-road-group';
+    scene.add(this._trackingRoadGroup);
 
     // Dedicated truck mount group
     this._trackingTruckGroup = new THREE.Group();
@@ -1487,6 +1410,172 @@ _updateCalloutPosition(index = this.selectedVehicle) {
 
     this._trackingCamera = new THREE.PerspectiveCamera(36, 16 / 9, 0.1, 500);
     this._trackingScene = scene;
+  }
+
+  /**
+   * Updates dynamically extruded 3D curved road ribbon along the active route corridor.
+   * Generates asphalt mesh, center dashes, outer fog lines, curbs, guardrails, and poles
+   * curving identically to verified OpenStreetMap highway alignment.
+   */
+  _updateCurvedRoadGeometry(THREE, samples, travelMeters) {
+    if (!this._trackingRoadGroup || !samples || samples.length < 2) return;
+
+    // Helper: build curved ribbon along centerline samples
+    function buildCurvedRibbon(samples, lateralCenter, width, yOffset) {
+      const numSamples = samples.length;
+      const posArr = new Float32Array(numSamples * 2 * 3);
+      const normArr = new Float32Array(numSamples * 2 * 3);
+      const uvArr = new Float32Array(numSamples * 2 * 2);
+      const indices = [];
+
+      const halfW = width / 2;
+      for (let i = 0; i < numSamples; i++) {
+        const s = samples[i];
+        const cx = s.x + s.nx * lateralCenter;
+        const cz = s.z + s.nz * lateralCenter;
+
+        // Left vertex
+        posArr[i * 6 + 0] = cx - s.nx * halfW;
+        posArr[i * 6 + 1] = yOffset;
+        posArr[i * 6 + 2] = cz - s.nz * halfW;
+        normArr[i * 6 + 0] = 0; normArr[i * 6 + 1] = 1; normArr[i * 6 + 2] = 0;
+        uvArr[i * 4 + 0] = 0; uvArr[i * 4 + 1] = s.dist / 8;
+
+        // Right vertex
+        posArr[i * 6 + 3] = cx + s.nx * halfW;
+        posArr[i * 6 + 4] = yOffset;
+        posArr[i * 6 + 5] = cz + s.nz * halfW;
+        normArr[i * 6 + 3] = 0; normArr[i * 6 + 4] = 1; normArr[i * 6 + 5] = 0;
+        uvArr[i * 4 + 2] = 1; uvArr[i * 4 + 3] = s.dist / 8;
+
+        if (i < numSamples - 1) {
+          const v0 = i * 2, v1 = i * 2 + 1, v2 = (i + 1) * 2, v3 = (i + 1) * 2 + 1;
+          indices.push(v0, v2, v1);
+          indices.push(v1, v2, v3);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(normArr, 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(uvArr, 2));
+      geo.setIndex(indices);
+      return geo;
+    }
+
+    // Helper: build center dashed markings
+    function buildCenterDashes(samples, yOffset = 0.015) {
+      const positions = [];
+      const normals = [];
+      const indices = [];
+      let vertCount = 0;
+
+      for (let i = 0; i < samples.length - 1; i++) {
+        const s0 = samples[i];
+        const s1 = samples[i + 1];
+        if ((s0.dist % 6.0) < 3.2) {
+          const halfW = 0.11;
+          const p0L = [s0.x - s0.nx * halfW, yOffset, s0.z - s0.nz * halfW];
+          const p0R = [s0.x + s0.nx * halfW, yOffset, s0.z + s0.nz * halfW];
+          const p1L = [s1.x - s1.nx * halfW, yOffset, s1.z - s1.nz * halfW];
+          const p1R = [s1.x + s1.nx * halfW, yOffset, s1.z + s1.nz * halfW];
+
+          positions.push(...p0L, ...p0R, ...p1L, ...p1R);
+          normals.push(0, 1, 0,  0, 1, 0,  0, 1, 0,  0, 1, 0);
+
+          indices.push(vertCount, vertCount + 2, vertCount + 1);
+          indices.push(vertCount + 1, vertCount + 2, vertCount + 3);
+          vertCount += 4;
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normals), 3));
+      geo.setIndex(indices);
+      return geo;
+    }
+
+    // Clear old road meshes cleanly
+    while (this._trackingRoadGroup.children.length > 0) {
+      const child = this._trackingRoadGroup.children[0];
+      if (child.geometry) child.geometry.dispose();
+      this._trackingRoadGroup.remove(child);
+    }
+
+    const mats = this._trackingMaterials;
+
+    // 1. Asphalt Road Surface (14m wide)
+    const roadGeo = buildCurvedRibbon(samples, 0, 14, 0);
+    this._trackingRoadGroup.add(new THREE.Mesh(roadGeo, mats.road));
+
+    // 2. Center Dashed Line Markings
+    const dashGeo = buildCenterDashes(samples, 0.015);
+    this._trackingRoadGroup.add(new THREE.Mesh(dashGeo, mats.dash));
+
+    // 3. Fog Lines (outer edge lines at +/- 5.5m)
+    const leftFogGeo = buildCurvedRibbon(samples, -5.5, 0.24, 0.012);
+    this._trackingRoadGroup.add(new THREE.Mesh(leftFogGeo, mats.fogLine));
+    const rightFogGeo = buildCurvedRibbon(samples, 5.5, 0.24, 0.012);
+    this._trackingRoadGroup.add(new THREE.Mesh(rightFogGeo, mats.fogLine));
+
+    // 4. Concrete Curbs (+/- 6.5m)
+    const leftCurbGeo = buildCurvedRibbon(samples, -6.5, 1.4, 0.07);
+    this._trackingRoadGroup.add(new THREE.Mesh(leftCurbGeo, mats.curb));
+    const rightCurbGeo = buildCurvedRibbon(samples, 6.5, 1.4, 0.07);
+    this._trackingRoadGroup.add(new THREE.Mesh(rightCurbGeo, mats.curb));
+
+    // 5. Guardrail Beams (+/- 7.6m)
+    const leftBeamGeo = buildCurvedRibbon(samples, -7.6, 0.12, 0.55);
+    this._trackingRoadGroup.add(new THREE.Mesh(leftBeamGeo, mats.guardrail));
+    const rightBeamGeo = buildCurvedRibbon(samples, 7.6, 0.12, 0.55);
+    this._trackingRoadGroup.add(new THREE.Mesh(rightBeamGeo, mats.guardrail));
+
+    // 6. Guardrail Posts (spaced every 6m along curve)
+    const postGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.8, 8);
+    for (let i = 0; i < samples.length; i += 3) {
+      const s = samples[i];
+      for (const side of [-7.6, 7.6]) {
+        const post = new THREE.Mesh(postGeo, mats.guardrail);
+        post.position.set(s.x + s.nx * side, 0.4, s.z + s.nz * side);
+        this._trackingRoadGroup.add(post);
+      }
+    }
+
+    // 7. Modern Highway LED Lighting Poles (spaced every ~28m along right shoulder at +9.0m)
+    const poleGeo = new THREE.CylinderGeometry(0.1, 0.14, 8.5, 8);
+    const armGeo = new THREE.BoxGeometry(2.2, 0.08, 0.08);
+    const lampGeo = new THREE.BoxGeometry(0.6, 0.12, 0.25);
+    for (let i = 0; i < samples.length; i += 11) {
+      const s = samples[i];
+      const poleGroup = new THREE.Group();
+      poleGroup.position.set(s.x + s.nx * 9.0, 0, s.z + s.nz * 9.0);
+
+      const pole = new THREE.Mesh(poleGeo, mats.lampPole);
+      pole.position.y = 4.25;
+      poleGroup.add(pole);
+
+      const arm = new THREE.Mesh(armGeo, mats.lampPole);
+      arm.position.set(-0.8, 8.5, 0);
+      poleGroup.add(arm);
+
+      const lamp = new THREE.Mesh(lampGeo, mats.lampHead);
+      lamp.position.set(-1.8, 8.44, 0);
+      poleGroup.add(lamp);
+
+      this._trackingRoadGroup.add(poleGroup);
+    }
+
+    // 8. Distant Industrial Warehouses / Port Silhouettes along corridor
+    const whGeo = new THREE.BoxGeometry(20, 10, 32);
+    for (let i = 2; i < samples.length; i += 15) {
+      const s = samples[i];
+      const side = (i % 30 === 2) ? -32 : 32;
+      const mat = mats.warehouse[(i / 15 | 0) % mats.warehouse.length];
+      const wh = new THREE.Mesh(whGeo, mat);
+      wh.position.set(s.x + s.nx * side, 5.0, s.z + s.nz * side);
+      this._trackingRoadGroup.add(wh);
+    }
   }
 
   /**
@@ -1540,6 +1629,17 @@ _updateCalloutPosition(index = this.selectedVehicle) {
       }
     }
 
+    const vr = this.vehicleRoutes?.[this.selectedVehicle];
+    const prog = this._routeProgressions?.[this.selectedVehicle] || 0;
+    const pos = vr ? interpolateRoute(vr.waypoints, prog) : { travelMeters: prog * 1000, lng: 116.82, lat: -1.22, distanceMeters: prog * 1000, headingDegrees: 0, isCurved: false };
+
+    // Get Route Window in local metric frame (extending 60m behind to 140m ahead)
+    const windowData = vr ? getRouteWindow(vr.waypoints, pos.travelMeters || pos.distanceMeters, 60, 140, 2.5) : { samples: [] };
+    this._lastRouteWindow = windowData;
+
+    // Update dynamically extruded 3D curved road ribbon
+    this._updateCurvedRoadGeometry(THREE, windowData.samples, pos.travelMeters || pos.distanceMeters);
+
     // Apply Camera Framing based on mode (Follow vs Chase)
     const isMobile = aspect < 1.0;
     if (this.cameraMode === 'follow') {
@@ -1552,29 +1652,21 @@ _updateCalloutPosition(index = this.selectedVehicle) {
         this._trackingCamera.lookAt(0, 1.4, 0);
       }
     } else if (this.cameraMode === 'chase') {
-      // Behind-and-above dynamic angle along the road
+      // Behind-and-above dynamic angle along the curved road
+      const lookAhead = windowData.samples.find(s => s.sLocal >= 22) || { x: 0, z: 20 };
       if (isMobile) {
         this._trackingCamera.position.set(-0.35, 9.0, -22.0);
-        this._trackingCamera.lookAt(0, 2.2, 18.0);
+        this._trackingCamera.lookAt(lookAhead.x * 0.6, 2.2, Math.max(16, lookAhead.z));
       } else {
         this._trackingCamera.position.set(-0.35, 10.0, -25.0);
-        this._trackingCamera.lookAt(0, 2.5, 20.0);
+        this._trackingCamera.lookAt(lookAhead.x * 0.6, 2.5, Math.max(18, lookAhead.z));
       }
     }
 
-    // Wheel rotation and road movement synchronized with canonical simulation
-    const vr = this.vehicleRoutes?.[this.selectedVehicle];
-    const prog = this._routeProgressions?.[this.selectedVehicle] || 0;
-    const pos = vr ? interpolateRoute(vr.waypoints, prog) : { travelMeters: prog * 1000, lng: 116.82, lat: -1.22 };
-
-    const wheelAngle = ((pos.travelMeters || 0) / 0.52) % (Math.PI * 2);
+    // Wheel rotation synchronized with canonical travel distance
+    const wheelAngle = ((pos.travelMeters || pos.distanceMeters || 0) / 0.52) % (Math.PI * 2);
     for (const w of this._trackingWheels) {
       w.rotation.x = wheelAngle;
-    }
-
-    // Smooth dash line movement for motion cues
-    if (this._trackingDashGroup) {
-      this._trackingDashGroup.position.z = ((pos.travelMeters || 0) % 6);
     }
 
     // Update Context Mini-Map inset
@@ -1583,7 +1675,7 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     // Update Top-left badge to Option B provenance
     const geoBadge = document.getElementById('map-geo-badge');
     if (geoBadge) {
-      geoBadge.textContent = 'LIVE GEOGRAPHY • BALIKPAPAN | SIMULATED 3D VIEW';
+      geoBadge.textContent = 'LIVE GEOGRAPHY • BALIKPAPAN | ROUTE-DERIVED 3D VIEW';
     }
 
     // Synchronize underlying MapLibre camera without causing digital zoom blur
@@ -1591,7 +1683,90 @@ _updateCalloutPosition(index = this.selectedVehicle) {
   }
 
   /**
-   * Updates Option B Context Mini-Map inset with real Balikpapan corridor path and vehicle marker.
+   * Projects route waypoints to 2D SVG coordinates within the Context Mini-Map viewport.
+   * Maintains accurate aspect ratio and geodetic scaling across Balikpapan corridors.
+   *
+   * @param {Array<Array<number>>} waypoints
+   * @param {number} [targetW=140]
+   * @param {number} [targetH=40]
+   * @param {number} [padX=10]
+   * @param {number} [padY=8]
+   * @returns {object} { d, minLng, maxLng, minLat, maxLat, cosLat, scale, offsetX, offsetY, spanEast, spanNorth }
+   */
+  projectRouteToMiniMap(waypoints, targetW = 140, targetH = 40, padX = 10, padY = 8) {
+    if (!waypoints || waypoints.length === 0) return { d: '', bbox: null };
+    let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+    for (const pt of waypoints) {
+      if (pt[0] < minLng) minLng = pt[0];
+      if (pt[0] > maxLng) maxLng = pt[0];
+      if (pt[1] < minLat) minLat = pt[1];
+      if (pt[1] > maxLat) maxLat = pt[1];
+    }
+    const midLat = (minLat + maxLat) / 2;
+    const cosLat = Math.cos(midLat * Math.PI / 180);
+    const spanEast = Math.max(50, (maxLng - minLng) * 111320 * cosLat);
+    const spanNorth = Math.max(50, (maxLat - minLat) * 111320);
+
+    const scale = Math.min(targetW / spanEast, targetH / spanNorth);
+    const offsetX = padX + (targetW - spanEast * scale) / 2;
+    const offsetY = padY + targetH - (targetH - spanNorth * scale) / 2;
+
+    const points = waypoints.map(pt => {
+      const e = (pt[0] - minLng) * 111320 * cosLat;
+      const n = (pt[1] - minLat) * 111320;
+      return [
+        Math.round((offsetX + e * scale) * 10) / 10,
+        Math.round((offsetY - n * scale) * 10) / 10
+      ];
+    });
+
+    const d = points.map((p, i) => (i === 0 ? 'M ' : 'L ') + p[0] + ',' + p[1]).join(' ');
+    return { d, minLng, maxLng, minLat, maxLat, cosLat, scale, offsetX, offsetY, spanEast, spanNorth };
+  }
+
+  /**
+   * Projects a [lng, lat] coordinate to SVG [x, y] in Context Mini-Map,
+   * calculating the exact orthogonal distance to the rendered route polyline.
+   *
+   * @param {number} lng
+   * @param {number} lat
+   * @param {Array<Array<number>>} waypoints
+   * @returns {{ x: number, y: number, minDistanceToPath: number, onRoute: boolean }}
+   */
+  projectPointToMiniMap(lng, lat, waypoints, targetW = 140, targetH = 40, padX = 10, padY = 8) {
+    const proj = this.projectRouteToMiniMap(waypoints, targetW, targetH, padX, padY);
+    if (!proj.cosLat) return { x: 0, y: 0, minDistanceToPath: Infinity, onRoute: false };
+
+    const e = (lng - proj.minLng) * 111320 * proj.cosLat;
+    const n = (lat - proj.minLat) * 111320;
+    const x = Math.round((proj.offsetX + e * proj.scale) * 10) / 10;
+    const y = Math.round((proj.offsetY - n * proj.scale) * 10) / 10;
+
+    let minDistanceToPath = Infinity;
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      const p0e = (waypoints[i][0] - proj.minLng) * 111320 * proj.cosLat;
+      const p0n = (waypoints[i][1] - proj.minLat) * 111320;
+      const x0 = proj.offsetX + p0e * proj.scale;
+      const y0 = proj.offsetY - p0n * proj.scale;
+
+      const p1e = (waypoints[i + 1][0] - proj.minLng) * 111320 * proj.cosLat;
+      const p1n = (waypoints[i + 1][1] - proj.minLat) * 111320;
+      const x1 = proj.offsetX + p1e * proj.scale;
+      const y1 = proj.offsetY - p1n * proj.scale;
+
+      const dx = x1 - x0, dy = y1 - y0;
+      const lenSq = dx * dx + dy * dy;
+      let t = lenSq > 0 ? ((x - x0) * dx + (y - y0) * dy) / lenSq : 0;
+      t = Math.max(0, Math.min(1, t));
+      const dist = Math.hypot(x - (x0 + t * dx), y - (y0 + t * dy));
+      if (dist < minDistanceToPath) minDistanceToPath = dist;
+    }
+
+    return { x, y, minDistanceToPath, onRoute: minDistanceToPath < 2.5 };
+  }
+
+  /**
+   * Updates Option B Context Mini-Map inset with real GeoJSON projected path and vehicle marker.
    */
   _updateContextMiniMap(pos, index) {
     const miniMap = document.getElementById('context-mini-map');
@@ -1601,30 +1776,35 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     const vr = this.vehicleRoutes?.[index];
     const fromName = HUBS[vr?.from]?.name || vr?.from || 'Kariangau';
     const toName = HUBS[vr?.to]?.name || vr?.to || 'KM 13';
-    const truckId = `TRK-${String(index + 1).padStart(3, '0')}`;
+    const truckId = 'TRK-' + String(index + 1).padStart(3, '0');
 
     const elId = document.getElementById('mini-map-id');
     if (elId) elId.textContent = truckId;
     const elRoute = document.getElementById('mini-map-route-name');
-    if (elRoute) elRoute.textContent = `${fromName} → ${toName}`;
+    if (elRoute) elRoute.textContent = fromName + ' → ' + toName;
 
-    // Move vehicle dot along the route path
-    const prog = this._routeProgressions?.[index] || 0;
-    const cx = 15 + prog * (140 - 15);
-    const cy = 44 - Math.sin(prog * Math.PI) * 18 - prog * 8;
+    // Real route polyline projection and marker positioning
+    const svgPath = document.getElementById('mini-map-route-path');
     const dot = document.getElementById('mini-map-vehicle-dot');
-    if (dot) {
-      dot.setAttribute('cx', String(Math.round(cx)));
-      dot.setAttribute('cy', String(Math.round(cy)));
+    if (vr?.waypoints && vr.waypoints.length > 1) {
+      const proj = this.projectRouteToMiniMap(vr.waypoints);
+      if (svgPath) svgPath.setAttribute('d', proj.d);
+
+      if (dot && pos?.lng !== undefined && pos?.lat !== undefined) {
+        const pt = this.projectPointToMiniMap(pos.lng, pos.lat, vr.waypoints);
+        dot.setAttribute('cx', String(pt.x));
+        dot.setAttribute('cy', String(pt.y));
+      }
     }
   }
 
   /**
    * Calculates exact 2D screen projected bounding box of the active truck in pixels.
-   * Enables geometric non-occlusion assertions and collision-free callout badge positioning.
+   * Fail-Closed Contract: returns { available: false, visible: false } when model or camera is not ready.
+   * Zero synthetic fallback percentages (Gate V42-G7).
    *
    * @param {number} index - Vehicle index
-   * @returns {object} { minX, maxX, minY, maxY, width, height, centerX, centerY }
+   * @returns {object} { available, visible, minX, maxX, minY, maxY, width, height, centerX, centerY }
    */
   getScreenBoundingBox(index = this.selectedVehicle) {
     const canvas = this.map ? this.map.getCanvas() : null;
@@ -1636,20 +1816,29 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     if (this.cameraMode === 'follow' || this.cameraMode === 'chase' || this.cameraMode === 'inspect') {
       const cam = (this.cameraMode === 'inspect') ? this._inspectCamera : this._trackingCamera;
       const truck = (this.cameraMode === 'inspect') ? this._inspectTruck : this._trackingTruckGroup;
-      if (!cam || !truck || !THREE_NS) {
+
+      // Honest fail-closed guard: no synthetic fallback percentages
+      if (!cam || !truck || !THREE_NS || truck.children.length === 0) {
         return {
-          minX: Math.round(rect.left + width * 0.42),
-          maxX: Math.round(rect.left + width * 0.58),
-          minY: Math.round(rect.top + height * 0.38),
-          maxY: Math.round(rect.top + height * 0.52),
-          width: Math.round(width * 0.16),
-          height: Math.round(height * 0.14),
-          centerX: Math.round(rect.left + width * 0.5),
-          centerY: Math.round(rect.top + height * 0.45)
+          available: false,
+          visible: false,
+          minX: 0, maxX: 0, minY: 0, maxY: 0,
+          width: 0, height: 0, centerX: 0, centerY: 0,
+          reason: 'Model or tracking camera unavailable'
         };
       }
 
       const box = new THREE_NS.Box3().setFromObject(truck);
+      if (box.isEmpty()) {
+        return {
+          available: false,
+          visible: false,
+          minX: 0, maxX: 0, minY: 0, maxY: 0,
+          width: 0, height: 0, centerX: 0, centerY: 0,
+          reason: 'Vehicle bounding box is empty'
+        };
+      }
+
       const corners = [
         new THREE_NS.Vector3(box.min.x, box.min.y, box.min.z),
         new THREE_NS.Vector3(box.min.x, box.min.y, box.max.z),
@@ -1662,8 +1851,10 @@ _updateCalloutPosition(index = this.selectedVehicle) {
       ];
 
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      let visibleCorners = 0;
       for (const corner of corners) {
         const p = corner.clone().project(cam);
+        if (p.z >= -1 && p.z <= 1) visibleCorners++;
         const sx = rect.left + (p.x * 0.5 + 0.5) * width;
         const sy = rect.top + (-(p.y * 0.5) + 0.5) * height;
         if (sx < minX) minX = sx;
@@ -1672,7 +1863,19 @@ _updateCalloutPosition(index = this.selectedVehicle) {
         if (sy > maxY) maxY = sy;
       }
 
+      if (visibleCorners === 0 || maxX <= minX || maxY <= minY) {
+        return {
+          available: true,
+          visible: false,
+          minX: 0, maxX: 0, minY: 0, maxY: 0,
+          width: 0, height: 0, centerX: 0, centerY: 0,
+          reason: 'Vehicle is outside camera frustum'
+        };
+      }
+
       return {
+        available: true,
+        visible: true,
         minX: Math.round(minX),
         maxX: Math.round(maxX),
         minY: Math.round(minY),
@@ -1688,11 +1891,15 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     const vr = this.vehicleRoutes?.[index];
     const prog = this._routeProgressions?.[index] || 0;
     if (!this.map || !vr) {
-      return { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0, centerX: 0, centerY: 0 };
+      return { available: false, visible: false, minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0, centerX: 0, centerY: 0 };
     }
     const pos = interpolateRoute(vr.waypoints, prog);
     const pt = this.map.project([pos.lng, pos.lat]);
+    const inViewport = pt.x >= 0 && pt.x <= width && pt.y >= 0 && pt.y <= height;
+
     return {
+      available: true,
+      visible: inViewport,
       minX: Math.round(rect.left + pt.x - 20),
       maxX: Math.round(rect.left + pt.x + 20),
       minY: Math.round(rect.top + pt.y - 12),
@@ -1704,6 +1911,35 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     };
   }
 
+  /**
+   * Returns current curved road geometry information for runtime verification and QA audits.
+   */
+  getCurvedRoadInfo() {
+    const vr = this.vehicleRoutes?.[this.selectedVehicle];
+    const prog = this._routeProgressions?.[this.selectedVehicle] || 0;
+    const sample = vr ? getRouteSample(vr.waypoints, prog, { routeId: vr.name }) : null;
+    const win = vr && sample ? getRouteWindow(vr.waypoints, sample.distanceMeters, 60, 140, 2.5) : null;
+    const samples = win?.samples || [];
+    const maxLateralDisplacement = samples.length > 0 ? Math.max(...samples.map(s => Math.abs(s.x))) : 0;
+    return {
+      routeId: vr?.name,
+      distanceMeters: sample?.distanceMeters ?? 0,
+      headingDegrees: sample?.headingDegrees ?? 0,
+      isCurved: sample ? sample.isCurved : false,
+      sampleCount: samples.length,
+      maxLateralDisplacement: Math.round(maxLateralDisplacement * 100) / 100
+    };
+  }
+
+  /**
+   * Returns authoritative route sample for a specific vehicle and progression.
+   */
+  getVehicleRouteSample(index = this.selectedVehicle, progress) {
+    const vr = this.vehicleRoutes?.[index];
+    if (!vr) return null;
+    const p = (progress !== undefined) ? progress : (this._routeProgressions?.[index] || 0);
+    return getRouteSample(vr.waypoints, p, { routeId: vr.name });
+  }
 
   // --- __atlasCanvasLoops CONTRACT ---
 

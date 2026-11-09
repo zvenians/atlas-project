@@ -157,42 +157,105 @@ export function assignVehicleRoutes(count = 20) {
 }
 
 /**
- * Distance-based geographic route interpolation along verified waypoints.
- * Ensures vehicles travel at realistic, uniform physical speed without corner warping.
- *
- * @param {Array<Array<number>>} waypoints - Polyline coordinates [[lng, lat], ...]
- * @param {number} progress - Normalized progress in range [0, 1]
- * @returns {{ lng: number, lat: number, bearing: number, travelMeters: number }}
+ * Route Provenance and Licensing Metadata Contract (v4.2).
  */
-export function interpolateRoute(waypoints, progress) {
-  const t = ((progress % 1) + 1) % 1; // Normalize to [0, 1)
-  const n = waypoints ? waypoints.length : 0;
-  if (n <= 0) return { lng: 116.83, lat: -1.22, bearing: 0, travelMeters: 0 };
-  if (n === 1) return { lng: waypoints[0][0], lat: waypoints[0][1], bearing: 0, travelMeters: 0 };
+export const ROUTE_METADATA = {
+  provider: "OpenStreetMap (ODbL) via OSRM Driving Router",
+  retrievalDate: "2026-11-06T23:25:00Z",
+  license: "Open Database License (ODbL) 1.0",
+  attribution: "© OpenStreetMap contributors",
+  geographicBounds: {
+    minLng: 116.78,
+    maxLng: 116.96,
+    minLat: -1.285,
+    maxLat: -1.155
+  },
+  corridorCount: 10,
+  hubCount: 10
+};
 
-  // Calculate cumulative segment distances
+/**
+ * Precomputes cumulative distances along a polyline.
+ * @param {Array<Array<number>>} waypoints
+ * @returns {{ distances: number[], totalDistance: number }}
+ */
+export function computeCumulativeDistances(waypoints) {
+  const n = waypoints ? waypoints.length : 0;
+  if (n <= 1) return { distances: [0], totalDistance: 0 };
   const distances = [0];
-  let totalDist = 0;
+  let total = 0;
   for (let i = 0; i < n - 1; i++) {
     const p0 = waypoints[i];
     const p1 = waypoints[i + 1];
     const dLng = (p1[0] - p0[0]) * 111320 * Math.cos((p0[1] + p1[1]) * Math.PI / 360);
     const dLat = (p1[1] - p0[1]) * 111320;
     const segDist = Math.hypot(dLng, dLat);
-    totalDist += segDist;
-    distances.push(totalDist);
+    total += segDist;
+    distances.push(total);
+  }
+  return { distances, totalDistance: total };
+}
+
+/**
+ * Single Authoritative Route State Contract for ATLAS v4.2.
+ * Calculates exact arc-length s, WGS84 [lng, lat], heading (degrees),
+ * unit tangent vector, lateral normal vector, curvature, and travel distance.
+ *
+ * @param {Array<Array<number>>} waypoints - Polyline coordinates [[lng, lat], ...]
+ * @param {number} progressOrDistance - Normalized progress [0, 1] or arc-length in meters
+ * @param {object} [options] - Configuration options { isDistance: boolean, routeId: string|number, speedMps: number }
+ * @returns {object} Canonical sample
+ */
+export function getRouteSample(waypoints, progressOrDistance, options = {}) {
+  const n = waypoints ? waypoints.length : 0;
+  if (n === 0) {
+    return {
+      routeId: options.routeId ?? 'unknown',
+      distanceMeters: 0,
+      totalDistanceMeters: 0,
+      progress: 0,
+      lngLat: [116.83, -1.22],
+      lng: 116.83,
+      lat: -1.22,
+      headingDegrees: 0,
+      tangent: [0, 1],
+      normal: [1, 0],
+      curvature: 0,
+      isCurved: false,
+      speedMetersPerSecond: options.speedMps ?? 0
+    };
   }
 
-  if (totalDist === 0) return { lng: waypoints[0][0], lat: waypoints[0][1], bearing: 0, travelMeters: 0 };
-
-  if (t === 0) {
-    const dLng = waypoints[1][0] - waypoints[0][0];
-    const dLat = waypoints[1][1] - waypoints[0][1];
-    const bearing = (Math.atan2(dLng, dLat) * 180 / Math.PI + 360) % 360;
-    return { lng: waypoints[0][0], lat: waypoints[0][1], bearing, travelMeters: 0 };
+  const { distances, totalDistance } = computeCumulativeDistances(waypoints);
+  if (totalDistance === 0 || n === 1) {
+    return {
+      routeId: options.routeId ?? 'unknown',
+      distanceMeters: 0,
+      totalDistanceMeters: 0,
+      progress: 0,
+      lngLat: [waypoints[0][0], waypoints[0][1]],
+      lng: waypoints[0][0],
+      lat: waypoints[0][1],
+      headingDegrees: 0,
+      tangent: [0, 1],
+      normal: [1, 0],
+      curvature: 0,
+      isCurved: false,
+      speedMetersPerSecond: options.speedMps ?? 0
+    };
   }
 
-  const targetDist = t * totalDist;
+  let targetDist;
+  let progress;
+  if (options.isDistance) {
+    targetDist = Math.max(0, Math.min(totalDistance, progressOrDistance));
+    progress = totalDistance > 0 ? targetDist / totalDistance : 0;
+  } else {
+    progress = ((progressOrDistance % 1) + 1) % 1;
+    targetDist = progress * totalDistance;
+  }
+
+  // Find bracketing segment
   let segIdx = 0;
   for (let i = 0; i < n - 1; i++) {
     if (targetDist <= distances[i + 1]) {
@@ -210,11 +273,198 @@ export function interpolateRoute(waypoints, progress) {
   const lng = p0[0] + (p1[0] - p0[0]) * segT;
   const lat = p0[1] + (p1[1] - p0[1]) * segT;
 
-  const dLng = p1[0] - p0[0];
-  const dLat = p1[1] - p0[1];
-  const bearing = (Math.atan2(dLng, dLat) * 180 / Math.PI + 360) % 360;
+  // Tangent calculation with symmetric sampling window delta (5m) for smooth curve continuity
+  const delta = Math.min(6.0, Math.max(1.0, segLength * 0.4));
+  function samplePointAtDist(dist) {
+    let sIdx = 0;
+    for (let i = 0; i < n - 1; i++) {
+      if (dist <= distances[i + 1]) {
+        sIdx = i;
+        break;
+      }
+    }
+    const sLen = distances[sIdx + 1] - distances[sIdx];
+    const u = sLen > 0 ? (dist - distances[sIdx]) / sLen : 0;
+    return [
+      waypoints[sIdx][0] + (waypoints[sIdx + 1][0] - waypoints[sIdx][0]) * u,
+      waypoints[sIdx][1] + (waypoints[sIdx + 1][1] - waypoints[sIdx][1]) * u
+    ];
+  }
 
-  return { lng, lat, bearing, travelMeters: targetDist };
+  const prevPt = samplePointAtDist(Math.max(0, targetDist - delta));
+  const nextPt = samplePointAtDist(Math.min(totalDistance, targetDist + delta));
+
+  const cosLat = Math.cos(lat * Math.PI / 180);
+  const dEast = (nextPt[0] - prevPt[0]) * 111320 * cosLat;
+  const dNorth = (nextPt[1] - prevPt[1]) * 111320;
+  const len = Math.hypot(dEast, dNorth);
+
+  const tx = len > 0 ? dEast / len : 0;
+  const ty = len > 0 ? dNorth / len : 1;
+  const heading = (Math.atan2(dEast, dNorth) * 180 / Math.PI + 360) % 360;
+
+  // Lateral normal vector (right normal in ground plane)
+  const nx = ty;
+  const ny = -tx;
+
+  // Curvature estimation (rate of heading change over arc-length)
+  let curvature = 0;
+  if (targetDist >= delta && targetDist <= totalDistance - delta) {
+    const ptBefore = samplePointAtDist(Math.max(0, targetDist - delta));
+    const ptCenter = [lng, lat];
+    const ptAfter = samplePointAtDist(Math.min(totalDistance, targetDist + delta));
+    const h1 = (Math.atan2((ptCenter[0] - ptBefore[0]) * 111320 * cosLat, (ptCenter[1] - ptBefore[1]) * 111320) * 180 / Math.PI + 360) % 360;
+    const h2 = (Math.atan2((ptAfter[0] - ptCenter[0]) * 111320 * cosLat, (ptAfter[1] - ptCenter[1]) * 111320) * 180 / Math.PI + 360) % 360;
+    let diff = h2 - h1;
+    while (diff > 180) diff -= 360;
+    while (diff < -180) diff += 360;
+    curvature = (diff * Math.PI / 180) / delta;
+  }
+  const isCurved = Math.abs(curvature) > 0.0008;
+
+  return {
+    routeId: options.routeId ?? 'unknown',
+    distanceMeters: Math.round(targetDist * 100) / 100,
+    totalDistanceMeters: Math.round(totalDistance * 100) / 100,
+    progress,
+    lngLat: [lng, lat],
+    lng,
+    lat,
+    headingDegrees: Math.round(heading * 100) / 100,
+    tangent: [tx, ty],
+    normal: [nx, ny],
+    curvature,
+    isCurved,
+    speedMetersPerSecond: options.speedMps ?? (47 * 1000 / 3600)
+  };
+}
+
+/**
+ * Transforms a WGS84 coordinate [lng, lat] into the local metric frame
+ * centered on originLngLat [originLng, originLat] with forward heading headingDeg.
+ *
+ * Local axes:
+ *   +Z is forward along the vehicle heading.
+ *   +X is lateral right.
+ *   +Y is up (elevation = 0).
+ *
+ * @param {[number, number]} pointLngLat - [lng, lat] to transform
+ * @param {[number, number]} originLngLat - [originLng, originLat] vehicle reference
+ * @param {number} headingDeg - Vehicle heading in degrees clockwise from North
+ * @returns {{ x: number, z: number, eastMeters: number, northMeters: number }}
+ */
+export function transformToLocalFrame(pointLngLat, originLngLat, headingDeg) {
+  const cosLat = Math.cos(originLngLat[1] * Math.PI / 180);
+  const east = (pointLngLat[0] - originLngLat[0]) * 111320 * cosLat;
+  const north = (pointLngLat[1] - originLngLat[1]) * 111320;
+
+  const rad = headingDeg * Math.PI / 180;
+  const sinH = Math.sin(rad);
+  const cosH = Math.cos(rad);
+
+  // Local Z is forward (along heading vector [sinH, cosH]):
+  const z = east * sinH + north * cosH;
+  // Local X is right (along right normal [cosH, -sinH]):
+  const x = east * cosH - north * sinH;
+
+  return { x, z, eastMeters: east, northMeters: north };
+}
+
+/**
+ * Samples a route window around centerDistanceMeters, transformed into local metric frame.
+ * Produces ordered centerline vertices with local coordinates, tangents, normals, and distances.
+ *
+ * @param {Array<Array<number>>} waypoints
+ * @param {number} centerDistanceMeters
+ * @param {number} [windowBefore=60] - Meters behind the vehicle
+ * @param {number} [windowAfter=140] - Meters ahead of the vehicle
+ * @param {number} [stepMeters=2.5] - Sampling interval along curve
+ * @returns {{ samples: Array<{ dist: number, sLocal: number, x: number, z: number, lng: number, lat: number, heading: number, isCurved: boolean, tx: number, tz: number, nx: number, nz: number }>, originSample: object }}
+ */
+export function getRouteWindow(waypoints, centerDistanceMeters, windowBefore = 60, windowAfter = 140, stepMeters = 2.5) {
+  const originSample = getRouteSample(waypoints, centerDistanceMeters, { isDistance: true });
+  const total = originSample.totalDistanceMeters;
+  if (total === 0) return { samples: [], originSample };
+
+  const startDist = Math.max(0, centerDistanceMeters - windowBefore);
+  const endDist = Math.min(total, centerDistanceMeters + windowAfter);
+
+  const samples = [];
+  for (let s = startDist; s <= endDist; s += stepMeters) {
+    const smp = getRouteSample(waypoints, s, { isDistance: true });
+    const local = transformToLocalFrame(smp.lngLat, originSample.lngLat, originSample.headingDegrees);
+    samples.push({
+      dist: s,
+      sLocal: s - centerDistanceMeters,
+      x: local.x,
+      z: local.z,
+      lng: smp.lng,
+      lat: smp.lat,
+      heading: smp.headingDegrees,
+      isCurved: smp.isCurved
+    });
+  }
+
+  // Ensure end point is included
+  if (samples.length > 0 && samples[samples.length - 1].dist < endDist) {
+    const smp = getRouteSample(waypoints, endDist, { isDistance: true });
+    const local = transformToLocalFrame(smp.lngLat, originSample.lngLat, originSample.headingDegrees);
+    samples.push({
+      dist: endDist,
+      sLocal: endDist - centerDistanceMeters,
+      x: local.x,
+      z: local.z,
+      lng: smp.lng,
+      lat: smp.lat,
+      heading: smp.headingDegrees,
+      isCurved: smp.isCurved
+    });
+  }
+
+  // Calculate local tangent and normal at each sample
+  for (let i = 0; i < samples.length; i++) {
+    const prev = samples[Math.max(0, i - 1)];
+    const next = samples[Math.min(samples.length - 1, i + 1)];
+    const dx = next.x - prev.x;
+    const dz = next.z - prev.z;
+    const len = Math.hypot(dx, dz);
+    const tx = len > 0 ? dx / len : 0;
+    const tz = len > 0 ? dz / len : 1;
+    // Right normal in local horizontal plane
+    const nx = tz;
+    const nz = -tx;
+    samples[i].tx = tx;
+    samples[i].tz = tz;
+    samples[i].nx = nx;
+    samples[i].nz = nz;
+  }
+
+  return { samples, originSample };
+}
+
+/**
+ * Distance-based geographic route interpolation along verified waypoints.
+ * Wraps getRouteSample for single authoritative route state.
+ *
+ * @param {Array<Array<number>>} waypoints - Polyline coordinates [[lng, lat], ...]
+ * @param {number} progress - Normalized progress in range [0, 1]
+ * @returns {{ lng: number, lat: number, bearing: number, travelMeters: number, distanceMeters: number, totalDistanceMeters: number, headingDegrees: number, isCurved: boolean }}
+ */
+export function interpolateRoute(waypoints, progress) {
+  const sample = getRouteSample(waypoints, progress);
+  return {
+    lng: sample.lng,
+    lat: sample.lat,
+    bearing: sample.headingDegrees,
+    travelMeters: sample.distanceMeters,
+    distanceMeters: sample.distanceMeters,
+    totalDistanceMeters: sample.totalDistanceMeters,
+    headingDegrees: sample.headingDegrees,
+    tangent: sample.tangent,
+    normal: sample.normal,
+    curvature: sample.curvature,
+    isCurved: sample.isCurved
+  };
 }
 
 /**
