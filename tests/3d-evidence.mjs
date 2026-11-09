@@ -670,9 +670,11 @@ try {
   // --- NEGATIVE CONTROL 3: Frozen Clock / Static Progression Detection ---
   await mapPage.evaluate(() => {
     window.ATLAS_V21.sim.pause();
+    window.__atlas3DEngine?.map?.triggerRepaint?.();
   });
+  await mapPage.waitForTimeout(100);
   const progBefore = await mapPage.evaluate(() => window.__atlas3DGetVehicleProgress?.(0));
-  await mapPage.waitForTimeout(200);
+  await mapPage.waitForTimeout(300);
   const progAfter = await mapPage.evaluate(() => window.__atlas3DGetVehicleProgress?.(0));
   assert.equal(progBefore, progAfter, 'Negative control: vehicle progression must remain frozen when simulation is paused');
   report.assertions.push('Negative Control 3: Paused simulation clock halts vehicle progression');
