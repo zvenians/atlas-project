@@ -426,7 +426,11 @@ try {
   report.assertions.push('Live-map authentic GLB tanker close shot verified');
 
   // 25. Deterministic Motion 3-Frame Sequence
-  await mapPage.evaluate(() => window.ATLAS_V21.sim.pause());
+  await mapPage.evaluate(() => {
+    window.ATLAS_V21.sim.pause();
+    for (let i = 0; i < 3; i++) window.ATLAS_V21.sim.step();
+  });
+  await mapPage.waitForTimeout(200);
   const tickStart = await mapPage.evaluate(() => window.ATLAS_V21.sim.snapshot().tick);
   await captureProof(mapPage, '29-S03-motion-frame-1.png', `29. Simulation Motion Sample 1 (Virtual Tick ${tickStart})`);
 
