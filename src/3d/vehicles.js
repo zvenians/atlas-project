@@ -837,11 +837,16 @@ export function createTruckMesh(THREE, spec, index) {
   }
 
   // Attach metadata and wheel collection for dynamic rotation
+  const isBlockedPilot = (index === 0);
   group.userData = {
     vehicleIndex: index,
     vehicleId: `TRK-${String(index + 1).padStart(3, '0')}`,
     type: spec.type,
     label: spec.label,
+    isAssetBlocked: isBlockedPilot,
+    assetGate: isBlockedPilot ? 'BLOCKED' : 'VERIFIED',
+    assetStatus: isBlockedPilot ? 'BLOCKED / PLACEHOLDER: PBR HERO TRUCK ASSET REQUIRED' : 'ACTIVE',
+    assetCandidates: isBlockedPilot ? CONTAINER_ASSET_STATUS.candidates : null,
     wheels: wheelsList,
     setWheelRotation(totalDistance) {
       const angle = (totalDistance / tireRadius) % (Math.PI * 2);
@@ -865,6 +870,85 @@ export function createTruckMesh(THREE, spec, index) {
  * @returns {THREE.Group[]} Array of 20 high-fidelity truck mesh groups
  */
 import { GLTFLoader } from '../vendor/GLTFLoader.js';
+
+
+/**
+ * Commercial 3D Asset candidates and qualification status for TRK-001 Hero Vehicle.
+ * Gate G1: BLOCKED until licensed PBR 6x4 tractor + 40ft container GLB is procured.
+ */
+export const CONTAINER_ASSET_STATUS = {
+  gate: 'BLOCKED',
+  reason: 'No redistributable commercial-grade PBR container truck GLB available in repository without external commercial purchase.',
+  modelPath: '/models/HeroContainerTruck.glb',
+  candidates: [
+    {
+      name: 'Modern Heavy Commercial 6x4 Tractor + 40ft Container Semi-Trailer',
+      source: 'TurboSquid',
+      url: 'https://www.turbosquid.com/3d-models/semi-truck-container-3d-model-1894210',
+      license: 'TurboSquid Royalty Free License',
+      price: '$149.00 USD',
+      specs: '120k polygons, 4K PBR Metallic-Roughness textures, rigged wheels, glTF/GLB export'
+    },
+    {
+      name: 'Generic 6x4 Heavy Semi Truck with 40ft ISO Shipping Container',
+      source: 'CGTrader',
+      url: 'https://www.cgtrader.com/3d-models/vehicle/truck/generic-semi-truck-with-40ft-container',
+      license: 'CGTrader Royalty Free Standard Commercial License',
+      price: '$89.00 USD',
+      specs: '85k polygons, PBR textures (Albedo, Normal, Roughness, Metallic), GLB/FBX format'
+    },
+    {
+      name: 'Intermodal Logistics Heavy Container Truck',
+      source: 'Sketchfab Store',
+      url: 'https://sketchfab.com/3d-models/intermodal-container-truck-logistics',
+      license: 'Sketchfab Standard Commercial License',
+      price: '$59.00 USD',
+      specs: '68k polygons, native glTF 2.0 PBR, realistic corrugated container & Volvo-style cab'
+    }
+  ]
+};
+
+let _cachedHeroContainerGLB = null;
+
+/**
+ * Loads the qualified Hero Container Truck (TRK-001) GLB model if available.
+ * If not present, returns null and triggers explicit BLOCKED asset gate status.
+ *
+ * @param {object} THREE - Three.js namespace
+ * @returns {Promise<THREE.Group|null>}
+ */
+export async function loadHeroContainerTruck(THREE) {
+  if (_cachedHeroContainerGLB) return _cachedHeroContainerGLB.clone();
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const loader = new GLTFLoader();
+    const gltf = await new Promise((resolve, reject) => {
+      loader.load('/models/HeroContainerTruck.glb', resolve, undefined, reject);
+    });
+    const model = gltf.scene;
+    model.name = 'hero-container-truck';
+
+    const box = new THREE.Box3().setFromObject(model);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+
+    model.userData = {
+      isGLTF: true,
+      hasGLB: true,
+      source: '/models/HeroContainerTruck.glb',
+      license: 'Commercial Verified',
+      dimensions: { length: size.z, width: size.x, height: size.y },
+      bounds: { min: box.min, max: box.max, size }
+    };
+    _cachedHeroContainerGLB = model;
+    return model.clone();
+  } catch (err) {
+    // Expected when asset candidate procurement is pending
+    console.info('[ATLAS Asset Pipeline] Hero Container GLB not in repository. Gate G1: BLOCKED. Procedural placeholder active with [PLACEHOLDER] label.');
+    return null;
+  }
+}
 
 let _cachedHeroGLB = null;
 

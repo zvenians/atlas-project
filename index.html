@@ -577,6 +577,7 @@ window.tailwind.config = {
             <div>
               <span class="text-[10px] font-bold text-[#A4B5BC] block">VEHICLE CLASS</span>
               <span id="inspector-truck-class" class="text-xs text-slate-300">Hazmat Fuel / Chemical Tanker</span>
+              <div id="inspector-truck-asset" class="text-[10px] text-amber-400 font-bold hidden">ASSET GATE: BLOCKED [Placeholder active - Verified 3D GLB candidate required]</div>
             </div>
             <div>
               <span class="text-[10px] font-bold text-[#A4B5BC] block">SOURCE</span>
@@ -1483,10 +1484,17 @@ function atlasLegacyNotice(message) {
   if (!node) {
     node = document.createElement('div'); node.id = 'atlas-legacy-notice';
     node.setAttribute('role','status'); node.setAttribute('aria-live','polite');
-    node.className = 'fixed bottom-4 right-4 z-50 bg-[#10141A] border border-[#DCA876] text-[#F5F1E9] p-3 rounded text-xs shadow-xl max-w-sm';
+    node.className = 'fixed top-16 right-4 sm:top-auto sm:bottom-4 z-50 bg-[#10141A]/95 border border-[#DCA876] text-[#F5F1E9] p-3 rounded-lg text-xs shadow-2xl max-w-sm backdrop-blur transition-opacity duration-300';
     document.body.appendChild(node);
   }
   node.textContent = message;
+  node.style.opacity = '1';
+  node.style.display = 'block';
+  clearTimeout(node._hideTimer);
+  node._hideTimer = setTimeout(() => {
+    node.style.opacity = '0';
+    setTimeout(() => { if (node.style.opacity === '0') node.style.display = 'none'; }, 300);
+  }, 4000);
 }
 
 // Virtual Clock

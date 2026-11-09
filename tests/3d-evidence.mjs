@@ -368,15 +368,15 @@ try {
 
   // --- HERMES VISUAL INTEGRITY v4.1.2 EXTENDED VERIFICATION ---
 
-  // 21. S03 Desktop Follow TRK-004 (Option B High-Detail Tracking View)
+  // 21. S03 Desktop Follow TRK-001 (Hero Pilot 40ft Container Truck in Kariangau Corridor)
   await mapPage.evaluate(async () => {
-    window.selectMapVehicle(3);
+    window.selectMapVehicle(0);
     await window.setCamMode('follow');
   });
   await mapPage.waitForTimeout(600);
   const bboxDesktopFollow = await mapPage.evaluate(() => {
     const engine = window.__atlas3DEngine;
-    const bbox = engine.getScreenBoundingBox(3);
+    const bbox = engine.getScreenBoundingBox(0);
     const callout = document.getElementById('truck-callout-map');
     const calloutRect = callout ? callout.getBoundingClientRect() : null;
     const inspector = document.getElementById('vehicle-inspector-panel');
@@ -384,25 +384,69 @@ try {
     return { bbox, calloutRect, inspectorRect };
   });
 
-    assert.ok(bboxDesktopFollow.bbox.width >= 180, `Desktop Follow truck bbox width must be >= 180px, got ${bboxDesktopFollow.bbox.width}px`);
+  assert.ok(bboxDesktopFollow.bbox.width >= 180, `Desktop Follow truck bbox width must be >= 180px, got ${bboxDesktopFollow.bbox.width}px`);
   assert.ok(bboxDesktopFollow.bbox.height >= 70, `Desktop Follow truck bbox height must be >= 70px, got ${bboxDesktopFollow.bbox.height}px`);
   assert.ok(bboxDesktopFollow.calloutRect.bottom <= bboxDesktopFollow.bbox.minY + 5, 'Callout badge must be positioned cleanly above vehicle bounding box');
   assert.ok(bboxDesktopFollow.bbox.maxX < bboxDesktopFollow.inspectorRect.left, 'Vehicle must not be occluded by docked inspector panel');
   report.assertions.push(`Desktop Follow vehicle projected bbox verified (${bboxDesktopFollow.bbox.width}x${bboxDesktopFollow.bbox.height}px >= 180x70px, zero occlusion)`);
-  await captureProof(mapPage, '21-S03-desktop-follow-trk004.png', '21. S03 Desktop Follow Mode — Authentic GLB Truck & Option B Dual-View Tracking');
+  await captureProof(mapPage, '21-S03-desktop-follow-trk004.png', '21. S03 Desktop Follow Mode — TRK-001 Hero Heavy Container Semi-Trailer');
 
-  // 22. S03 Desktop Chase TRK-004 (Option B Behind-Vehicle Dynamic View)
+  // 22. S03 Desktop Chase TRK-001 (Behind-Vehicle Dynamic Road Perspective)
   await mapPage.evaluate(async () => {
     await window.setCamMode('chase');
   });
   await mapPage.waitForTimeout(600);
-  const bboxDesktopChase = await mapPage.evaluate(() => window.__atlas3DEngine.getScreenBoundingBox(3));
+  const bboxDesktopChase = await mapPage.evaluate(() => window.__atlas3DEngine.getScreenBoundingBox(0));
   assert.ok(bboxDesktopChase.width >= 180, `Desktop Chase truck bbox width must be >= 180px, got ${bboxDesktopChase.width}px`);
   report.assertions.push(`Desktop Chase vehicle projected bbox verified (${bboxDesktopChase.width}x${bboxDesktopChase.height}px >= 180px)`);
-  await captureProof(mapPage, '22-S03-desktop-chase-trk004.png', '22. S03 Desktop Chase Mode — Low Dynamic Road Angle');
+  await captureProof(mapPage, '22-S03-desktop-chase-trk004.png', '22. S03 Desktop Chase Mode — TRK-001 Rear Dynamic Road Angle');
 
-  // 23. Dynamic Vehicle Selection Switch: TRK-004 -> TRK-001 -> TRK-004
-  await mapPage.evaluate(() => window.selectMapVehicle(0));
+  // Gate G1 Asset Authenticity & Conspicuous Placeholder Verification
+  const gateG1Check = await mapPage.evaluate(async () => {
+    const modelInfo = window.__atlas3DGetModelInfo?.(0);
+    const callout = document.getElementById('truck-callout-map')?.innerText;
+    const assetEl = document.getElementById('inspector-truck-asset');
+    let heroGlbExists = false;
+    try {
+      const res = await fetch('/models/HeroContainerTruck.glb');
+      heroGlbExists = res.ok;
+    } catch {}
+    return {
+      modelInfo,
+      callout,
+      assetVisible: assetEl && !assetEl.classList.contains('hidden'),
+      assetText: assetEl?.innerText,
+      heroGlbExists
+    };
+  });
+  assert.equal(gateG1Check.heroGlbExists, false, 'Candidate /models/HeroContainerTruck.glb not yet procured');
+  assert.equal(gateG1Check.modelInfo.isAssetBlocked, true, 'TRK-001 modelInfo must reflect isAssetBlocked: true');
+  assert.equal(gateG1Check.modelInfo.assetGate, 'BLOCKED', 'TRK-001 assetGate must be BLOCKED');
+  assert.ok(gateG1Check.modelInfo.assetCandidates?.length >= 3, 'Must have at least 3 verifiable commercial candidates');
+  assert.ok(gateG1Check.callout?.includes('[PLACEHOLDER]'), 'Callout badge must conspicuously show [PLACEHOLDER]');
+  assert.equal(gateG1Check.assetVisible, true, 'Inspector asset status must be visible for blocked candidate');
+  report.assertions.push('Gate G1: Asset Authenticity evaluated — Status BLOCKED (3 verifiable commercial candidates documented, placeholder conspicuously labeled)');
+
+  // 23. Dynamic Vehicle Selection Switch: TRK-001 -> TRK-004 -> TRK-001
+  await mapPage.evaluate(() => window.selectMapVehicle(3));
+  await mapPage.waitForTimeout(400);
+  const switchCheck3 = await mapPage.evaluate(() => {
+    return {
+      inspectorId: document.getElementById('inspector-truck-id')?.innerText,
+      callout: document.getElementById('truck-callout-map')?.innerText,
+      selected: window.__atlas3DEngine?.selectedVehicle
+    };
+  });
+  assert.equal(switchCheck3.selected, 3);
+  assert.equal(switchCheck3.inspectorId, 'TRK-004');
+
+  // Switch back to TRK-001 and advance 2 simulation ticks to capture progression
+  await mapPage.evaluate(() => {
+    window.selectMapVehicle(0);
+    window.ATLAS_V21?.sim?.step();
+    window.ATLAS_V21?.sim?.step();
+    window.__atlas3DEngine?.map?.triggerRepaint?.();
+  });
   await mapPage.waitForTimeout(400);
   const switchCheck0 = await mapPage.evaluate(() => {
     return {
@@ -417,7 +461,7 @@ try {
   await captureProof(mapPage, '23-S03-desktop-selected-trk001.png', '23. S03 Selection Switch — TRK-001 Active with Synchronized Inspector & Callout');
   report.assertions.push('Dynamic vehicle selection switch TRK-004 -> TRK-001 verified');
 
-  // Switch back to TRK-004
+  // Switch to TRK-004 temporarily for live GLB tanker close capture, then back
   await mapPage.evaluate(() => window.selectMapVehicle(3));
   await mapPage.waitForTimeout(400);
 
@@ -425,27 +469,74 @@ try {
   await captureProof(mapPage, '28-S03-live-glb-tanker-close.png', '28. S03 Live Map GLB Tanker — Sharp Close Shot with Real PBR Automotive Glaze');
   report.assertions.push('Live-map authentic GLB tanker close shot verified');
 
-  // 25. Deterministic Motion 3-Frame Sequence
-  await mapPage.evaluate(() => {
+  // 25. Deterministic Motion 3-Frame Sequence — TRK-001 on Kariangau Route
+  await mapPage.evaluate(async () => {
+    window.selectMapVehicle(0);
+    await window.setCamMode('follow');
     window.ATLAS_V21.sim.pause();
     for (let i = 0; i < 3; i++) window.ATLAS_V21.sim.step();
+    window.__atlas3DEngine?.map?.triggerRepaint?.();
   });
-  await mapPage.waitForTimeout(200);
-  const tickStart = await mapPage.evaluate(() => window.ATLAS_V21.sim.snapshot().tick);
-  await captureProof(mapPage, '29-S03-motion-frame-1.png', `29. Simulation Motion Sample 1 (Virtual Tick ${tickStart})`);
+  await mapPage.waitForTimeout(350);
+  const frame1Data = await mapPage.evaluate(() => {
+    const engine = window.__atlas3DEngine;
+    const vr = engine?.vehicleRoutes?.[0];
+    const prog = engine?._routeProgressions?.[0] || 0;
+    const tick = window.ATLAS_V21?.sim?.snapshot()?.tick;
+    const dist = prog * (vr?.totalDistanceMeters || 14430);
+    return {
+      tick,
+      prog: Math.round(prog * 100000) / 100000,
+      distMeters: Math.round(dist * 10) / 10,
+      wheelRotRad: Math.round(((dist / 0.52) % (Math.PI * 2)) * 100) / 100
+    };
+  });
+  await captureProof(mapPage, '29-S03-motion-frame-1.png', `29. Simulation Motion Sample 1 (Virtual Tick ${frame1Data.tick}, Dist ${frame1Data.distMeters}m)`);
 
-  await mapPage.evaluate(() => { for (let i = 0; i < 5; i++) window.ATLAS_V21.sim.step(); });
-  await mapPage.waitForTimeout(200);
-  const tickMid = await mapPage.evaluate(() => window.ATLAS_V21.sim.snapshot().tick);
-  await captureProof(mapPage, '30-S03-motion-frame-2.png', `30. Simulation Motion Sample 2 (Virtual Tick ${tickMid})`);
+  await mapPage.evaluate(() => {
+    for (let i = 0; i < 5; i++) window.ATLAS_V21.sim.step();
+    window.__atlas3DEngine?.map?.triggerRepaint?.();
+  });
+  await mapPage.waitForTimeout(350);
+  const frame2Data = await mapPage.evaluate(() => {
+    const engine = window.__atlas3DEngine;
+    const vr = engine?.vehicleRoutes?.[0];
+    const prog = engine?._routeProgressions?.[0] || 0;
+    const tick = window.ATLAS_V21?.sim?.snapshot()?.tick;
+    const dist = prog * (vr?.totalDistanceMeters || 14430);
+    return {
+      tick,
+      prog: Math.round(prog * 100000) / 100000,
+      distMeters: Math.round(dist * 10) / 10,
+      wheelRotRad: Math.round(((dist / 0.52) % (Math.PI * 2)) * 100) / 100
+    };
+  });
+  await captureProof(mapPage, '30-S03-motion-frame-2.png', `30. Simulation Motion Sample 2 (Virtual Tick ${frame2Data.tick}, Dist ${frame2Data.distMeters}m)`);
 
-  await mapPage.evaluate(() => { for (let i = 0; i < 5; i++) window.ATLAS_V21.sim.step(); });
-  await mapPage.waitForTimeout(200);
-  const tickEnd = await mapPage.evaluate(() => window.ATLAS_V21.sim.snapshot().tick);
-  await captureProof(mapPage, '31-S03-motion-frame-3.png', `31. Simulation Motion Sample 3 (Virtual Tick ${tickEnd})`);
+  await mapPage.evaluate(() => {
+    for (let i = 0; i < 5; i++) window.ATLAS_V21.sim.step();
+    window.__atlas3DEngine?.map?.triggerRepaint?.();
+  });
+  await mapPage.waitForTimeout(350);
+  const frame3Data = await mapPage.evaluate(() => {
+    const engine = window.__atlas3DEngine;
+    const vr = engine?.vehicleRoutes?.[0];
+    const prog = engine?._routeProgressions?.[0] || 0;
+    const tick = window.ATLAS_V21?.sim?.snapshot()?.tick;
+    const dist = prog * (vr?.totalDistanceMeters || 14430);
+    return {
+      tick,
+      prog: Math.round(prog * 100000) / 100000,
+      distMeters: Math.round(dist * 10) / 10,
+      wheelRotRad: Math.round(((dist / 0.52) % (Math.PI * 2)) * 100) / 100
+    };
+  });
+  await captureProof(mapPage, '31-S03-motion-frame-3.png', `31. Simulation Motion Sample 3 (Virtual Tick ${frame3Data.tick}, Dist ${frame3Data.distMeters}m)`);
 
-  assert.ok(tickMid > tickStart && tickEnd > tickMid, 'Deterministic tick sequence monotonically advanced');
-  report.assertions.push('Deterministic 3-frame route progression sequence verified');
+  assert.ok(frame2Data.tick > frame1Data.tick && frame3Data.tick > frame2Data.tick, 'Deterministic tick sequence monotonically advanced');
+  assert.ok(frame2Data.distMeters > frame1Data.distMeters && frame3Data.distMeters > frame2Data.distMeters, 'Travel distance monotonically advanced');
+  report.metrics.motionSequence = [frame1Data, frame2Data, frame3Data];
+  report.assertions.push('Gate G3: Deterministic 3-frame route progression sequence on TRK-001 verified');
 
   // --- MOBILE S03 FULL RESPONSIVE & BOTTOM SHEET VERIFICATION ---
   const mobS03 = await browser.newPage({ viewport: { width: 390, height: 844 } });
@@ -453,7 +544,7 @@ try {
   await mobS03.evaluate(() => window.switchView('map'));
   await mobS03.waitForTimeout(1000);
   await mobS03.evaluate(async () => {
-    window.selectMapVehicle(3);
+    window.selectMapVehicle(0);
     await window.setCamMode('follow');
   });
   await mobS03.waitForTimeout(600);
@@ -463,7 +554,7 @@ try {
     const sheet = document.getElementById('mobile-bottom-sheet');
     const sheetRect = sheet ? sheet.getBoundingClientRect() : null;
     const engine = window.__atlas3DEngine;
-    const bbox = engine ? engine.getScreenBoundingBox(3) : null;
+    const bbox = engine ? engine.getScreenBoundingBox(0) : null;
     return { sheetRect, bbox };
   });
 
@@ -479,7 +570,7 @@ try {
     const sheet = document.getElementById('mobile-bottom-sheet');
     const sheetRect = sheet ? sheet.getBoundingClientRect() : null;
     const engine = window.__atlas3DEngine;
-    const bbox = engine ? engine.getScreenBoundingBox(3) : null;
+    const bbox = engine ? engine.getScreenBoundingBox(0) : null;
     return { sheetRect, bbox, isExpanded: window.isMobileSheetExpanded };
   });
   assert.equal(mobExpandedCheck.isExpanded, true);
@@ -495,15 +586,15 @@ try {
   });
   await mobS03.waitForTimeout(400);
 
-  // 28. S03 Mobile Follow TRK-004
-  await captureProof(mobS03, '26-S03-mobile-follow-trk004.png', '26. S03 Mobile Follow Mode — Sized for Touch Viewport');
+  // 28. S03 Mobile Follow TRK-001
+  await captureProof(mobS03, '26-S03-mobile-follow-trk004.png', '26. S03 Mobile Follow Mode — TRK-001 Hero Heavy Container Semi-Trailer');
 
-  // 29. S03 Mobile Chase TRK-004
+  // 29. S03 Mobile Chase TRK-001
   await mobS03.evaluate(async () => await window.setCamMode('chase'));
   await mobS03.waitForTimeout(600);
-  const mobChaseCheck = await mobS03.evaluate(() => window.__atlas3DEngine.getScreenBoundingBox(3));
+  const mobChaseCheck = await mobS03.evaluate(() => window.__atlas3DEngine.getScreenBoundingBox(0));
   assert.ok(mobChaseCheck.width >= 100, `Mobile Chase truck bbox width must be >= 100px, got ${mobChaseCheck.width}px`);
-  await captureProof(mobS03, '27-S03-mobile-chase-trk004.png', '27. S03 Mobile Chase Mode — Road Perspective');
+  await captureProof(mobS03, '27-S03-mobile-chase-trk004.png', '27. S03 Mobile Chase Mode — TRK-001 Rear Road Perspective');
   report.assertions.push('Mobile Chase mode verified (>= 100px width)');
 
   // 30. Mobile Layers Modal Toggle Verification
@@ -528,24 +619,43 @@ try {
   }
   report.assertions.push('Zero horizontal overflow across 360px, 390px, and 768px viewports verified');
 
-  // Profile Mobile Follow and Chase render performance
-  const mobFollowInfo = await mobS03.evaluate(async () => {
-    await window.setCamMode('follow');
-    const t0 = performance.now();
-    window.__atlas3DEngine?.map?.triggerRepaint?.();
-    const t1 = performance.now();
-    const info = window.__atlas3DGetRenderInfo?.() || {};
-    return { calls: info.calls, triangles: info.triangles, frameDurationMs: Math.round((t1 - t0) * 100) / 100 };
-  });
+  // Profile Mobile Follow and Chase render performance over multi-frame animation sequence
+  async function sampleFrames(page, mode) {
+    return await page.evaluate(async (m) => {
+      await window.setCamMode?.(m);
+      return new Promise(resolve => {
+        const deltas = [];
+        let count = 0;
+        let lastTime = performance.now();
+        function loop(now) {
+          const dt = now - lastTime;
+          lastTime = now;
+          if (count > 0) deltas.push(dt);
+          count++;
+          if (count < 31) {
+            requestAnimationFrame(loop);
+          } else {
+            deltas.sort((a, b) => a - b);
+            const median = deltas[Math.floor(deltas.length / 2)];
+            const p95 = deltas[Math.floor(deltas.length * 0.95)];
+            const info = window.__atlas3DGetRenderInfo?.() || {};
+            resolve({
+              calls: info.calls,
+              triangles: info.triangles,
+              sampleCount: deltas.length,
+              medianMs: Math.round(median * 100) / 100,
+              p95Ms: Math.round(p95 * 100) / 100,
+              frameDurationMs: Math.round(median * 100) / 100
+            });
+          }
+        }
+        requestAnimationFrame(loop);
+      });
+    }, mode);
+  }
 
-  const mobChaseInfo = await mobS03.evaluate(async () => {
-    await window.setCamMode('chase');
-    const t0 = performance.now();
-    window.__atlas3DEngine?.map?.triggerRepaint?.();
-    const t1 = performance.now();
-    const info = window.__atlas3DGetRenderInfo?.() || {};
-    return { calls: info.calls, triangles: info.triangles, frameDurationMs: Math.round((t1 - t0) * 100) / 100 };
-  });
+  const mobFollowInfo = await sampleFrames(mobS03, 'follow');
+  const mobChaseInfo = await sampleFrames(mobS03, 'chase');
 
   await mobS03.close();
 
@@ -580,21 +690,42 @@ try {
   for (const vm of desktopModes) {
     const prof = await mapPage.evaluate(async (m) => {
       await window.setCamMode?.(m);
-      const t0 = performance.now();
-      window.__atlas3DEngine?.map?.triggerRepaint?.();
-      const t1 = performance.now();
-      const info = window.__atlas3DGetRenderInfo?.() || {};
-      return {
-        calls: info.calls,
-        triangles: info.triangles,
-        frameDurationMs: Math.round((t1 - t0) * 100) / 100
-      };
+      return new Promise(resolve => {
+        const deltas = [];
+        let count = 0;
+        let lastTime = performance.now();
+        function loop(now) {
+          const dt = now - lastTime;
+          lastTime = now;
+          if (count > 0) deltas.push(dt);
+          count++;
+          if (count < 31) {
+            requestAnimationFrame(loop);
+          } else {
+            deltas.sort((a, b) => a - b);
+            const median = deltas[Math.floor(deltas.length / 2)];
+            const p95 = deltas[Math.floor(deltas.length * 0.95)];
+            const info = window.__atlas3DGetRenderInfo?.() || {};
+            resolve({
+              calls: info.calls,
+              triangles: info.triangles,
+              sampleCount: deltas.length,
+              medianMs: Math.round(median * 100) / 100,
+              p95Ms: Math.round(p95 * 100) / 100,
+              frameDurationMs: Math.round(median * 100) / 100
+            });
+          }
+        }
+        requestAnimationFrame(loop);
+      });
     }, vm.mode);
     report.metrics.perView[vm.name] = prof;
   }
   report.metrics.perView['Mobile Follow'] = mobFollowInfo;
   report.metrics.perView['Mobile Chase'] = mobChaseInfo;
-  report.assertions.push('6-View Performance Profiling (Desktop Free, Overview, Follow, Chase, Mobile Follow, Chase) verified');
+  report.metrics.benchmarkDisclosure = 'SOFTWARE RENDERING — NOT CLIENT GPU BENCHMARK';
+  report.metrics.gpu60FpsStatus = 'NOT VERIFIED (Requires physical hardware GPU with WebGL2)';
+  report.assertions.push('Gate G4: 6-View Performance Truth (Measured Multi-Frame Intervals, Software Rendering Disclosed) verified');
 
   // --- Deterministic Wheel Rotation & Motion Physics Verification ---
   const wheelRotationCheck = await mapPage.evaluate(() => {

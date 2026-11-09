@@ -929,8 +929,20 @@ _updateCalloutPosition(index = this.selectedVehicle) {
         callout.style.display = '';
         this._updateCalloutPosition(index);
 
+        const truck = this.fleet?.[index];
+        const isBlocked = Boolean(truck?.userData?.isAssetBlocked);
         const line1 = document.getElementById('callout-line-1');
-        if (line1) line1.textContent = `${truckId} • ${statusStr.toUpperCase()}`;
+        if (line1) line1.textContent = `${truckId} • ${statusStr.toUpperCase()}${isBlocked ? ' [PLACEHOLDER]' : ''}`;
+
+        const assetEl = document.getElementById('inspector-truck-asset');
+        if (assetEl) {
+          if (isBlocked) {
+            assetEl.classList.remove('hidden');
+            assetEl.textContent = 'ASSET GATE G1: BLOCKED [PBR Hero Truck Candidate Required]';
+          } else {
+            assetEl.classList.add('hidden');
+          }
+        }
         const line2 = document.getElementById('callout-line-2');
         if (line2) line2.textContent = `${speedKmh} km/h · simulated · ${etaMinutes}m ETA`;
 
@@ -1338,6 +1350,10 @@ _updateCalloutPosition(index = this.selectedVehicle) {
       type: truck.userData.type,
       isGLTF: Boolean(truck.userData.isGLTF),
       hasGLB: Boolean(truck.userData.hasGLB),
+      isAssetBlocked: Boolean(truck.userData.isAssetBlocked),
+      assetGate: truck.userData.assetGate || (truck.userData.isAssetBlocked ? 'BLOCKED' : 'VERIFIED'),
+      assetStatus: truck.userData.assetStatus || 'ACTIVE',
+      assetCandidates: truck.userData.assetCandidates || null,
       modelUrl: truck.userData.modelUrl || null,
       meshCount,
       materialCount: materialsSet.size,
@@ -1383,34 +1399,79 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     const scene = new THREE.Scene();
     scene.name = 'atlas-tracking-scene';
 
-    // Lighting for realistic PBR automotive reflections
-    const ambient = new THREE.AmbientLight(0x5A6B7C, 1.9);
+    // 1. Realistic Daylight Sky & Atmospheric Horizon Fog
+    scene.background = new THREE.Color(0xC2D7E9);
+    scene.fog = new THREE.FogExp2(0xC2D7E9, 0.0035);
+
+    // Atmospheric Sky Dome (smooth daylight dome with fog blending)
+    const skyGeo = new THREE.SphereGeometry(380, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+    const skyMat = new THREE.MeshBasicMaterial({
+      color: 0x5A8FB8,
+      side: THREE.BackSide,
+      fog: false
+    });
+    const skyDome = new THREE.Mesh(skyGeo, skyMat);
+    skyDome.name = 'tracking-sky-dome';
+    scene.add(skyDome);
+
+    // Natural environmental lighting with sky and ground bounce
+    const ambient = new THREE.AmbientLight(0x64748B, 1.4);
     scene.add(ambient);
 
-    // Natural environmental sky and ground bounce illumination
-    const hemiLight = new THREE.HemisphereLight(0x38BDF8, 0x141C26, 0.95);
+    const hemiLight = new THREE.HemisphereLight(0x60A5FA, 0x334155, 1.15);
     hemiLight.name = 'tracking-hemi-light';
     scene.add(hemiLight);
 
-    const sun = new THREE.DirectionalLight(0xFFF3E0, 2.5);
-    sun.position.set(28, 42, 22);
+    const sun = new THREE.DirectionalLight(0xFFF6E8, 2.7);
+    sun.position.set(45, 65, 35);
     scene.add(sun);
 
-    const fillLight = new THREE.DirectionalLight(0x38BDF8, 0.85);
-    fillLight.position.set(-22, 18, -14);
+    const fillLight = new THREE.DirectionalLight(0x93C5FD, 0.85);
+    fillLight.position.set(-35, 25, -20);
     scene.add(fillLight);
 
-    // Large ground plane (240x240m)
-    const groundGeo = new THREE.PlaneGeometry(240, 240);
+    // Expanded natural terrain ground plane (800x800m)
+    const groundGeo = new THREE.PlaneGeometry(800, 800);
     const groundMat = new THREE.MeshStandardMaterial({
-      color: 0x0E141B,
-      roughness: 0.95,
-      metalness: 0.1
+      color: 0x222C24, // Tropical roadside soil & vegetation
+      roughness: 0.96,
+      metalness: 0.04
     });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.05;
     scene.add(ground);
+
+    // Soft radial ground contact shadow under mounted vehicle
+    let shadowTex = null;
+    if (typeof document !== 'undefined') {
+      try {
+        const shadowCanvas = document.createElement('canvas');
+        shadowCanvas.width = 128;
+        shadowCanvas.height = 256;
+        const sCtx = shadowCanvas.getContext('2d');
+        if (sCtx) {
+          const sGrad = sCtx.createRadialGradient(64, 128, 10, 64, 128, 64);
+          sGrad.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
+          sGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.35)');
+          sGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          sCtx.fillStyle = sGrad;
+          sCtx.fillRect(0, 0, 128, 256);
+          shadowTex = new THREE.CanvasTexture(shadowCanvas);
+        }
+      } catch {}
+    }
+    const contactShadowGeo = new THREE.PlaneGeometry(3.6, 15);
+    const contactShadowMat = new THREE.MeshBasicMaterial({
+      map: shadowTex,
+      transparent: true,
+      opacity: 0.75,
+      depthWrite: false
+    });
+    this._trackingContactShadow = new THREE.Mesh(contactShadowGeo, contactShadowMat);
+    this._trackingContactShadow.rotation.x = -Math.PI / 2;
+    this._trackingContactShadow.position.set(0, 0.02, 0);
+    scene.add(this._trackingContactShadow);
 
     // Realistic procedural asphalt texture with mineral grain noise and dual lane tire wear paths
     let asphaltTexture = null;
@@ -1585,74 +1646,91 @@ _updateCalloutPosition(index = this.selectedVehicle) {
       this._trackingPolePool.push(poleGroup);
     }
 
-    // Object pool for Scenery: Warehouses, Container Stacks, Port Cranes (16 pre-allocated groups)
+    // Object pool for Scenery: High-Bay Warehouses, Intermodal Yard Stacks, and Roadside Greenery (16 pre-allocated groups)
+    // Red stick cranes are completely eliminated from the highway tracking scene.
     this._trackingSceneryPool = [];
-    const whGeo = new THREE.BoxGeometry(24, 11, 36);
-    const roofPitchedGeo = new THREE.ConeGeometry(24 * 0.72, 3.5, 4);
+    const whGeo = new THREE.BoxGeometry(24, 10, 36);
+    const roofPitchedGeo = new THREE.ConeGeometry(24 * 0.72, 3.2, 4);
     roofPitchedGeo.rotateY(Math.PI / 4);
     roofPitchedGeo.scale(1, 1, 36 / 24);
+
+    const warehousePlinthGeo = new THREE.BoxGeometry(25, 1.2, 37);
+    const warehousePlinthMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.9 });
+    const warehouseWallMat = new THREE.MeshStandardMaterial({ color: 0x94A3B8, roughness: 0.65, metalness: 0.35 });
+    const warehouseRoofMat = new THREE.MeshStandardMaterial({ color: 0x1E293B, roughness: 0.75, metalness: 0.25 });
+    const loadingDoorMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.7 });
+
+    const foliageMat = new THREE.MeshStandardMaterial({ color: 0x1E3A20, roughness: 0.95 });
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4A3728, roughness: 0.9 });
 
     for (let sc = 0; sc < 16; sc++) {
       const scGroup = new THREE.Group();
       if (sc % 3 === 0) {
-        // High-Bay Industrial Warehouse with Loading Dock Doors
-        const whMat = this._trackingMaterials.warehouse[sc % this._trackingMaterials.warehouse.length];
-        const whBody = new THREE.Mesh(whGeo, whMat);
-        whBody.position.y = 5.5;
+        // High-Bay Industrial Logistics Warehouse
+        const plinth = new THREE.Mesh(warehousePlinthGeo, warehousePlinthMat);
+        plinth.position.y = 0.6;
+        scGroup.add(plinth);
+
+        const whBody = new THREE.Mesh(whGeo, warehouseWallMat);
+        whBody.position.y = 6.2;
         scGroup.add(whBody);
 
-        const roof = new THREE.Mesh(roofPitchedGeo, whMat);
-        roof.position.y = 12.5;
+        const roof = new THREE.Mesh(roofPitchedGeo, warehouseRoofMat);
+        roof.position.y = 12.8;
         scGroup.add(roof);
 
-        // Loading Dock Doors with rubber dock seals
+        // 3 Sectional Loading Dock Doors with dock bumpers
         for (let d = -1; d <= 1; d++) {
-          const dockDoor = new THREE.Mesh(
-            new THREE.BoxGeometry(4.2, 4.8, 0.1),
-            this._trackingMaterials.curb
-          );
-          dockDoor.position.set(d * 6.5, 2.5, 18.05);
+          const dockDoor = new THREE.Mesh(new THREE.BoxGeometry(4.2, 4.6, 0.1), loadingDoorMat);
+          dockDoor.position.set(d * 6.5, 3.5, 18.05);
           scGroup.add(dockDoor);
         }
       } else if (sc % 3 === 1) {
-        // Multi-tier Intermodal Container Yard Stacks (40ft ISO Containers stacked 3-high)
-        const contColors = [0x0A5C80, 0x006837, 0xEA580C, 0xF1F5F9, 0xBE185D];
+        // Multi-tier Intermodal Container Yard Stacks on concrete pad
+        const pad = new THREE.Mesh(new THREE.BoxGeometry(10, 0.2, 16), warehousePlinthMat);
+        pad.position.y = 0.1;
+        scGroup.add(pad);
+
+        const contColors = [0x3B82F6, 0x006837, 0xEA580C, 0xF1F5F9, 0x1E293B];
         for (let row = 0; row < 2; row++) {
           for (let tier = 0; tier < 3; tier++) {
             const cMat = new THREE.MeshStandardMaterial({
               color: contColors[(sc + row * 2 + tier) % contColors.length],
-              roughness: 0.5,
+              roughness: 0.45,
               metalness: 0.3
             });
             const contMesh = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.6, 12.2), cMat);
-            contMesh.position.set(row * 3.2 - 1.6, 1.3 + tier * 2.6, 0);
+            contMesh.position.set(row * 3.2 - 1.6, 1.4 + tier * 2.6, 0);
             scGroup.add(contMesh);
           }
         }
       } else {
-        // Port STS (Ship-to-Shore) Container Gantry Crane Silhouette
-        const craneMat = new THREE.MeshStandardMaterial({ color: 0xDC2626, roughness: 0.4, metalness: 0.6 });
-        const towerGeo = new THREE.BoxGeometry(0.8, 22, 0.8);
-        for (const legX of [-4, 4]) {
-          for (const legZ of [-4, 4]) {
-            const leg = new THREE.Mesh(towerGeo, craneMat);
-            leg.position.set(legX, 11, legZ);
-            scGroup.add(leg);
-          }
-        }
-        // Top Horizontal Boom
-        const boomGeo = new THREE.BoxGeometry(1.6, 1.6, 34);
-        const boom = new THREE.Mesh(boomGeo, craneMat);
-        boom.position.set(0, 22, 5);
-        scGroup.add(boom);
+        // Roadside Logistics Buffer with Tropical Trees & Supply Storage
+        const depotAnnex = new THREE.Mesh(new THREE.BoxGeometry(14, 5, 20), warehouseWallMat);
+        depotAnnex.position.set(0, 2.5, 0);
+        scGroup.add(depotAnnex);
 
-        // Warning obstruction beacon
-        const beacon = new THREE.Mesh(
-          new THREE.SphereGeometry(0.3, 8, 8),
-          new THREE.MeshBasicMaterial({ color: 0xEF4444 })
-        );
-        beacon.position.set(0, 23.5, 5);
-        scGroup.add(beacon);
+        // Cylindrical industrial fuel / fluid storage tank
+        const tankGeo = new THREE.CylinderGeometry(4, 4, 7, 16);
+        const tankMesh = new THREE.Mesh(tankGeo, warehousePlinthMat);
+        tankMesh.position.set(12, 3.5, 0);
+        scGroup.add(tankMesh);
+
+        // Cluster of 3 tropical roadside perimeter trees
+        for (let t = 0; t < 3; t++) {
+          const treeGroup = new THREE.Group();
+          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 4, 6), trunkMat);
+          trunk.position.y = 2;
+          treeGroup.add(trunk);
+
+          const canopy = new THREE.Mesh(new THREE.SphereGeometry(2.2 + t * 0.3, 8, 6), foliageMat);
+          canopy.position.y = 5.2;
+          canopy.scale.set(1, 1.3, 1);
+          treeGroup.add(canopy);
+
+          treeGroup.position.set(-10 + t * 4, 0, (t - 1) * 8);
+          scGroup.add(treeGroup);
+        }
       }
 
       scGroup.visible = false;
@@ -1867,6 +1945,9 @@ _updateCalloutPosition(index = this.selectedVehicle) {
       if (mountedModel) {
         this._trackingTruckGroup.add(mountedModel);
         this._currentMountedVehicleIndex = this.selectedVehicle;
+        if (this._trackingContactShadow) {
+          this._trackingContactShadow.position.z = mountedModel.position.z;
+        }
       }
     }
 
@@ -1884,23 +1965,23 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     // Apply Camera Framing based on mode (Follow vs Chase)
     const isMobile = aspect < 1.0;
     if (this.cameraMode === 'follow') {
-      // Leading 3/4 elevated perspective (camera leading truck along heading)
+      // Heroic front three-quarter view showing cab styling, wheels, container, road & daylight sky
       if (isMobile) {
-        this._trackingCamera.position.set(20, 14, 28);
-        this._trackingCamera.lookAt(0, -0.6, 0);
+        this._trackingCamera.position.set(16, 9.5, 20);
+        this._trackingCamera.lookAt(0, 1.0, 3);
       } else {
-        this._trackingCamera.position.set(30, 18, 42);
-        this._trackingCamera.lookAt(0, 1.4, 0);
+        this._trackingCamera.position.set(22, 11, 26);
+        this._trackingCamera.lookAt(0, 1.8, 4);
       }
     } else if (this.cameraMode === 'chase') {
-      // Behind-and-above dynamic angle along the curved road
+      // Behind-and-above dynamic road angle showcasing container rear doors, dual wheels, and curved highway
       const lookAhead = windowData.samples.find(s => s.sLocal >= 22) || { x: 0, z: 20 };
       if (isMobile) {
-        this._trackingCamera.position.set(-0.35, 9.0, -22.0);
-        this._trackingCamera.lookAt(lookAhead.x * 0.6, 2.2, Math.max(16, lookAhead.z));
+        this._trackingCamera.position.set(0, 5.0, -17.0);
+        this._trackingCamera.lookAt(lookAhead.x * 0.5, 1.8, Math.max(14, lookAhead.z));
       } else {
-        this._trackingCamera.position.set(-0.35, 10.0, -25.0);
-        this._trackingCamera.lookAt(lookAhead.x * 0.6, 2.5, Math.max(18, lookAhead.z));
+        this._trackingCamera.position.set(0, 5.8, -19.5);
+        this._trackingCamera.lookAt(lookAhead.x * 0.5, 2.0, Math.max(16, lookAhead.z));
       }
     }
 
