@@ -75,6 +75,8 @@ export class Atlas3DEngine {
       window.__atlas3DGetCameraState = () => this.getCameraState();
       window.__atlas3DGetRenderInfo = () => this.getRenderInfo();
       window.__atlas3DGetVehicleProgress = (i) => this.getVehicleProgress(i);
+      window.__atlas3DGetModelInfo = (i) => this.getModelInfo(i);
+      window.__atlas3DGetScreenBBox = (i) => this.getScreenBoundingBox(i);
     }
   }
 
@@ -246,6 +248,19 @@ export class Atlas3DEngine {
       if (this.map) this.map.resize();
     };
     window.addEventListener('resize', this._onResize);
+
+    // Operator manual takeover: cancels tracking and returns to Operator
+    const onManualTakeover = (e) => {
+      if (e && e.originalEvent && (this.cameraMode === 'follow' || this.cameraMode === 'chase')) {
+        this.setCameraMode('free');
+        if (typeof window.atlasLegacyNotice === 'function') {
+          window.atlasLegacyNotice('Operator manual takeover: Exited tracking mode');
+        }
+      }
+    };
+    this.map.on('dragstart', onManualTakeover);
+    this.map.on('rotatestart', onManualTakeover);
+    this.map.on('pitchstart', onManualTakeover);
 
     return this;
   }
@@ -584,6 +599,9 @@ export class Atlas3DEngine {
       render(gl, matrix) {
         if (!engine.renderer) return;
 
+        // Deterministic simulation update from canonical clock (all modes)
+        engine._updateFleetSimulation(THREE, maplibregl);
+
         if (engine.cameraMode === 'inspect') {
           if (!engine._inspectScene) {
             engine._initInspectScene(THREE);
@@ -598,6 +616,27 @@ export class Atlas3DEngine {
           }
         }
 
+        // Option B: Synchronized close-range 3D tracking scene for Follow and Chase
+        if (engine.cameraMode === 'follow' || engine.cameraMode === 'chase') {
+          if (!engine._trackingScene) {
+            engine._initTrackingScene(THREE);
+          }
+          if (engine._trackingScene && engine._trackingCamera) {
+            engine._updateTrackingScene(THREE, maplibregl);
+            engine.renderer.resetState();
+            engine.renderer.render(engine._trackingScene, engine._trackingCamera);
+            engine._measuredCalls = engine.renderer.info.render.calls;
+            engine._measuredTriangles = engine.renderer.info.render.triangles;
+            return;
+          }
+        }
+
+        // In free (Operator) and overview modes: hide context mini-map and restore standard geography badge
+        const miniMapEl = document.getElementById('context-mini-map');
+        if (miniMapEl) miniMapEl.style.display = 'none';
+        const geoBadgeEl = document.getElementById('map-geo-badge');
+        if (geoBadgeEl) geoBadgeEl.textContent = 'LIVE GEOGRAPHY • BALIKPAPAN';
+
         if (!engine.scene || !engine.camera) return;
 
         // MapLibre 6.x passes an options object containing defaultProjectionData.mainMatrix
@@ -609,8 +648,7 @@ export class Atlas3DEngine {
         // Apply MapLibre projection matrix to Three.js camera
         engine.camera.projectionMatrix = new THREE.Matrix4().fromArray(matrixArray);
 
-        // Deterministic simulation update
-        engine._updateFleetSimulation(THREE, maplibregl);
+
 
         // Render Three.js scene directly onto MapLibre WebGL context
         engine.renderer.resetState();
@@ -800,7 +838,7 @@ export class Atlas3DEngine {
         center: [pos.lng, pos.lat],
         bearing: pos.bearing,
         pitch: 58,
-        zoom: 19.4,
+        zoom: 18.2,
       });
     } else if (this.cameraMode === 'chase') {
       const offsetDeg = 28 / 111139; // ~28m offset behind vehicle along heading
@@ -812,14 +850,35 @@ export class Atlas3DEngine {
         center: [chaseLng, chaseLat],
         bearing: pos.bearing,
         pitch: 70,
-        zoom: 19.8,
+        zoom: 19.5,
       });
     }
+    this._updateCalloutPosition(this.selectedVehicle);
   }
 
   /**
    * Updates S03 UI telemetry overlay and inspector panel with live truthful data.
    */
+_updateCalloutPosition(index = this.selectedVehicle) {
+    const callout = document.getElementById('truck-callout-map');
+    if (!callout || !this.map) return;
+    if (this.cameraMode === 'inspect') {
+      callout.style.display = 'none';
+      return;
+    }
+    callout.style.display = '';
+    const bbox = this.getScreenBoundingBox(index);
+    const parentRect = callout.offsetParent ? callout.offsetParent.getBoundingClientRect() : { left: 0, top: 0 };
+    const localX = Math.round(bbox.centerX - parentRect.left);
+    const localY = Math.max(10, Math.round(bbox.minY - parentRect.top - 55));
+    callout.style.left = `${localX}px`;
+    callout.style.top = `${localY}px`;
+    callout.style.transform = 'translateX(-50%)';
+    callout.style.bottom = 'auto';
+    callout.style.right = 'auto';
+    callout.style.pointerEvents = 'none';
+  }
+
   _updateVehicleTelemetryUI(index) {
     const vr = this.vehicleRoutes[index];
     if (!vr) return;
@@ -846,28 +905,56 @@ export class Atlas3DEngine {
     const etaStr = `${etaMinutes}m remaining (${remainingKm} km)`;
     const truckType = VEHICLE_TYPES[index % VEHICLE_TYPES.length]?.label || 'Commercial Hauler';
 
-    // Update Floating Screen Callout (pinned 75px above vehicle projection)
+    // Update Floating Screen Callout (pinned cleanly above vehicle bounding box without overlap)
     const callout = document.getElementById('truck-callout-map');
     if (callout && this.map) {
       if (this.cameraMode === 'inspect') {
         callout.style.display = 'none';
       } else {
         callout.style.display = '';
-        const pt = this.map.project([pos.lng, pos.lat]);
-        const topPx = Math.max(65, Math.round(pt.y - 75));
-        const leftPx = Math.round(pt.x);
-        callout.style.left = `${leftPx}px`;
-        callout.style.top = `${topPx}px`;
-        callout.style.transform = 'translateX(-50%)';
-        callout.style.bottom = 'auto';
-        callout.style.right = 'auto';
-        callout.style.pointerEvents = 'none';
-        callout.innerHTML = `
-          <span style="width: 8px; height: 8px; background: ${statusColor};" class="rounded-full"></span>
-          <span>${truckId} · ${statusStr} • ${speedKmh} km/h · ETA ${etaStr}</span>
-        `;
+        this._updateCalloutPosition(index);
+
+        const line1 = document.getElementById('callout-line-1');
+        if (line1) line1.textContent = `${truckId} • ${statusStr.toUpperCase()}`;
+        const line2 = document.getElementById('callout-line-2');
+        if (line2) line2.textContent = `${speedKmh} km/h · simulated · ${etaMinutes}m ETA`;
+
+        // Maintain innerText fallback for test assert compatibility
+        if (!line1) {
+          callout.innerHTML = `
+            <span style="width: 8px; height: 8px; background: ${statusColor};" class="rounded-full"></span>
+            <span>${truckId} · ${statusStr} • ${speedKmh} km/h · ETA ${etaStr}</span>
+          `;
+        }
       }
     }
+
+    // Synchronize Mobile Bottom Sheet UI
+    const mobId = document.getElementById('mob-truck-id');
+    if (mobId) mobId.textContent = `${truckId} • ${statusStr}`;
+    const mobSpeed = document.getElementById('mob-truck-speed');
+    if (mobSpeed) mobSpeed.textContent = `${speedKmh} km/h`;
+    const mobEta = document.getElementById('mob-truck-eta');
+    if (mobEta) mobEta.textContent = `ETA ${etaMinutes} min`;
+    const mobDriver = document.getElementById('mob-sheet-driver');
+    if (mobDriver) mobDriver.textContent = fleetInfo.driver;
+    const mobRoute = document.getElementById('mob-sheet-route');
+    if (mobRoute) mobRoute.textContent = routeStr;
+    const mobSpeedLg = document.getElementById('mob-sheet-speed-large');
+    if (mobSpeedLg) mobSpeedLg.textContent = `${speedKmh} km/h`;
+    const mobEtaLg = document.getElementById('mob-sheet-eta-large');
+    if (mobEtaLg) mobEtaLg.textContent = `${etaMinutes} min ETA`;
+    const mobTick = document.getElementById('mob-sheet-tick');
+    if (mobTick) mobTick.textContent = `SIMULATED • virtual tick ${snap.tick}`;
+
+    // Synchronize Virtual Simulation Clock Displays
+    const virtualMin = 14 + Math.floor((snap.tick || 0) / 60);
+    const virtualSec = (snap.tick || 0) % 60;
+    const timeStr = `08:${String(virtualMin).padStart(2, '0')}:${String(virtualSec).padStart(2, '0')} WITA`;
+    const clockDisp = document.getElementById('sim-clock-display');
+    if (clockDisp) clockDisp.textContent = `VIRTUAL ${timeStr}  ·  DEMO`;
+    const mobClock = document.getElementById('mob-sim-clock-display');
+    if (mobClock) mobClock.textContent = `08:${String(virtualMin).padStart(2, '0')} WITA`;
 
     // Synchronize Inspector Panel elements dynamically
     const elId = document.getElementById('inspector-truck-id');
@@ -930,6 +1017,7 @@ export class Atlas3DEngine {
       });
     } else if (mode === 'follow' || mode === 'chase') {
       this._updateCameraTracking();
+      this._updateVehicleTelemetryUI(this.selectedVehicle);
       return Promise.resolve();
     }
     return Promise.resolve();
@@ -1086,16 +1174,25 @@ export class Atlas3DEngine {
     const modes = ['free', 'follow', 'chase', 'overview'];
     modes.forEach(m => {
       const btn = document.getElementById(`cam-${m}`);
-      if (!btn) return;
-      if (m === activeMode) {
-        btn.className = 'text-tealAccent font-bold px-2 py-0.5 rounded';
-        btn.style.background = 'rgba(45,212,191,0.15)';
-        btn.style.border = '1px solid rgba(45,212,191,0.3)';
-      } else {
-        btn.className = '';
-        btn.style.color = '#94A3B8';
-        btn.style.background = 'transparent';
-        btn.style.border = 'none';
+      if (btn) {
+        if (m === activeMode) {
+          btn.className = 'text-tealAccent font-bold px-2 py-0.5 rounded';
+          btn.style.background = 'rgba(45,212,191,0.15)';
+          btn.style.border = '1px solid rgba(45,212,191,0.3)';
+        } else {
+          btn.className = '';
+          btn.style.color = '#94A3B8';
+          btn.style.background = 'transparent';
+          btn.style.border = 'none';
+        }
+      }
+      const mobBtn = document.getElementById(`mob-cam-${m}`);
+      if (mobBtn) {
+        if (m === activeMode) {
+          mobBtn.className = 'flex-1 py-1.5 rounded-lg bg-[#DCA876] text-[#10141A] font-bold text-center';
+        } else {
+          mobBtn.className = 'flex-1 py-1.5 rounded-lg bg-[#28333B] text-white font-bold text-center';
+        }
       }
     });
   }
@@ -1251,6 +1348,362 @@ export class Atlas3DEngine {
   getVehicleProgress(index) {
     return this._routeProgressions[index] || 0;
   }
+  /**
+   * Option B: Initializes dedicated high-detail 3D tracking scene for Follow and Chase modes.
+   * Renders physically credible asphalt highway corridor, lane markings, guardrails,
+   * street lighting, and distant industrial port silhouettes.
+   */
+  _initTrackingScene(THREE) {
+    if (this._trackingScene) return;
+    const scene = new THREE.Scene();
+    scene.name = 'atlas-tracking-scene';
+
+    // Lighting for realistic PBR automotive reflections
+    const ambient = new THREE.AmbientLight(0x5A6B7C, 1.9);
+    scene.add(ambient);
+
+    const sun = new THREE.DirectionalLight(0xFFF3E0, 2.5);
+    sun.position.set(28, 42, 22);
+    scene.add(sun);
+
+    const fillLight = new THREE.DirectionalLight(0x38BDF8, 0.85);
+    fillLight.position.set(-22, 18, -14);
+    scene.add(fillLight);
+
+    // Ground plane
+    const groundGeo = new THREE.PlaneGeometry(240, 240);
+    const groundMat = new THREE.MeshStandardMaterial({
+      color: 0x0E141B,
+      roughness: 0.95,
+      metalness: 0.1
+    });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.05;
+    scene.add(ground);
+
+    // Asphalt highway road corridor (14m wide, 200m long)
+    const roadGeo = new THREE.PlaneGeometry(14, 200);
+    const roadMat = new THREE.MeshStandardMaterial({
+      color: 0x1B2127,
+      roughness: 0.82,
+      metalness: 0.18
+    });
+    const road = new THREE.Mesh(roadGeo, roadMat);
+    road.rotation.x = -Math.PI / 2;
+    road.position.set(0, 0, 0);
+    scene.add(road);
+
+    // Center dashed lane markings
+    this._trackingDashGroup = new THREE.Group();
+    this._trackingDashGroup.name = 'tracking-dash-group';
+    for (let z = -90; z <= 90; z += 6) {
+      const dashGeo = new THREE.PlaneGeometry(0.22, 3.2);
+      const dashMat = new THREE.MeshBasicMaterial({ color: 0xF1F5F9 });
+      const dash = new THREE.Mesh(dashGeo, dashMat);
+      dash.rotation.x = -Math.PI / 2;
+      dash.position.set(0, 0.015, z);
+      this._trackingDashGroup.add(dash);
+    }
+    scene.add(this._trackingDashGroup);
+
+    // Solid outer edge fog lines
+    for (const edgeX of [-5.5, 5.5]) {
+      const edgeGeo = new THREE.PlaneGeometry(0.24, 200);
+      const edgeMat = new THREE.MeshBasicMaterial({ color: 0xE2E8F0 });
+      const edgeLine = new THREE.Mesh(edgeGeo, edgeMat);
+      edgeLine.rotation.x = -Math.PI / 2;
+      edgeLine.position.set(edgeX, 0.015, 0);
+      scene.add(edgeLine);
+    }
+
+    // Concrete road curbs/shoulders
+    for (const curbX of [-6.5, 6.5]) {
+      const curbGeo = new THREE.BoxGeometry(1.6, 0.14, 200);
+      const curbMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9 });
+      const curb = new THREE.Mesh(curbGeo, curbMat);
+      curb.position.set(curbX, 0.07, 0);
+      scene.add(curb);
+    }
+
+    // Steel highway guardrails
+    for (const railX of [-7.6, 7.6]) {
+      const postGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.8, 8);
+      const steelMat = new THREE.MeshStandardMaterial({ color: 0x94A3B8, metalness: 0.85, roughness: 0.25 });
+      for (let pz = -90; pz <= 90; pz += 6) {
+        const post = new THREE.Mesh(postGeo, steelMat);
+        post.position.set(railX, 0.4, pz);
+        scene.add(post);
+      }
+      const wBeamGeo = new THREE.BoxGeometry(0.12, 0.35, 200);
+      const beam = new THREE.Mesh(wBeamGeo, steelMat);
+      beam.position.set(railX, 0.55, 0);
+      scene.add(beam);
+    }
+
+    // Modern highway LED lighting poles along right shoulder (spaced every 28m)
+    for (let lz = -84; lz <= 84; lz += 28) {
+      const poleGroup = new THREE.Group();
+      poleGroup.position.set(9.0, 0, lz);
+      const poleGeo = new THREE.CylinderGeometry(0.1, 0.14, 8.5, 8);
+      const poleMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.7, roughness: 0.3 });
+      const pole = new THREE.Mesh(poleGeo, poleMat);
+      pole.position.y = 4.25;
+      poleGroup.add(pole);
+
+      const armGeo = new THREE.BoxGeometry(2.2, 0.08, 0.08);
+      const arm = new THREE.Mesh(armGeo, poleMat);
+      arm.position.set(-0.8, 8.5, 0);
+      poleGroup.add(arm);
+
+      const lampGeo = new THREE.BoxGeometry(0.6, 0.12, 0.25);
+      const lampMat = new THREE.MeshStandardMaterial({ color: 0xCBD5E1, emissive: 0x2DD4BF, emissiveIntensity: 0.3 });
+      const lamp = new THREE.Mesh(lampGeo, lampMat);
+      lamp.position.set(-1.8, 8.44, 0);
+      poleGroup.add(lamp);
+
+      scene.add(poleGroup);
+    }
+
+    // Distant Industrial Port Silhouettes (warehouses & container stacks off the highway)
+    const indusColors = [0x1E293B, 0x263142, 0x1B2636];
+    for (let b = 0; b < 6; b++) {
+      const side = (b % 2 === 0) ? -1 : 1;
+      const bGeo = new THREE.BoxGeometry(20, 10, 32);
+      const bMat = new THREE.MeshStandardMaterial({
+        color: indusColors[b % indusColors.length],
+        roughness: 0.85,
+        metalness: 0.25
+      });
+      const wh = new THREE.Mesh(bGeo, bMat);
+      wh.position.set(side * 30, 5.0, -75 + b * 30);
+      scene.add(wh);
+    }
+
+    // Dedicated truck mount group
+    this._trackingTruckGroup = new THREE.Group();
+    this._trackingTruckGroup.name = 'tracking-truck-mount';
+    scene.add(this._trackingTruckGroup);
+
+    this._trackingCamera = new THREE.PerspectiveCamera(36, 16 / 9, 0.1, 500);
+    this._trackingScene = scene;
+  }
+
+  /**
+   * Option B: Updates camera framing, vehicle model, and wheel animation in tracking scene.
+   */
+  _updateTrackingScene(THREE, maplibregl) {
+    if (!this._trackingCamera || !this._trackingTruckGroup) return;
+
+    const canvas = this.map ? this.map.getCanvas() : null;
+    const aspect = canvas && canvas.height > 0 ? (canvas.width / canvas.height) : (16 / 9);
+    this._trackingCamera.aspect = aspect;
+    this._trackingCamera.updateProjectionMatrix();
+
+    // Check if mounted vehicle model needs updating
+    if (this._currentMountedVehicleIndex !== this.selectedVehicle) {
+      while (this._trackingTruckGroup.children.length > 0) {
+        this._trackingTruckGroup.remove(this._trackingTruckGroup.children[0]);
+      }
+      this._trackingWheels = [];
+
+      let mountedModel = null;
+      if (this.selectedVehicle === 3 && this._heroModel) {
+        mountedModel = this._heroModel.clone();
+        mountedModel.scale.set(2.0, 2.0, 2.0);
+        mountedModel.position.set(0, 0, 0);
+        mountedModel.traverse(obj => {
+          if (obj.isMesh && (obj.name.includes('Wheel') || obj.name.includes('wheel'))) {
+            this._trackingWheels.push(obj);
+          }
+        });
+      } else {
+        const sourceTruck = this.fleet?.[this.selectedVehicle];
+        if (sourceTruck) {
+          mountedModel = sourceTruck.clone();
+          mountedModel.position.set(0, 0, 0);
+          mountedModel.scale.set(1.0, 1.0, 1.0);
+          mountedModel.quaternion.identity();
+          if (sourceTruck.userData.wheels) {
+            mountedModel.traverse(obj => {
+              if (obj.isMesh && (obj.name.includes('wheel') || obj.name.includes('Wheel') || obj.name.includes('tire') || obj.name.includes('rim'))) {
+                this._trackingWheels.push(obj);
+              }
+            });
+          }
+        }
+      }
+
+      if (mountedModel) {
+        this._trackingTruckGroup.add(mountedModel);
+        this._currentMountedVehicleIndex = this.selectedVehicle;
+      }
+    }
+
+    // Apply Camera Framing based on mode (Follow vs Chase)
+    const isMobile = aspect < 1.0;
+    if (this.cameraMode === 'follow') {
+      // Leading 3/4 elevated perspective (camera leading truck along heading)
+      if (isMobile) {
+        this._trackingCamera.position.set(20, 14, 28);
+        this._trackingCamera.lookAt(0, -0.6, 0);
+      } else {
+        this._trackingCamera.position.set(30, 18, 42);
+        this._trackingCamera.lookAt(0, 1.4, 0);
+      }
+    } else if (this.cameraMode === 'chase') {
+      // Behind-and-above dynamic angle along the road
+      if (isMobile) {
+        this._trackingCamera.position.set(-0.35, 9.0, -22.0);
+        this._trackingCamera.lookAt(0, 2.2, 18.0);
+      } else {
+        this._trackingCamera.position.set(-0.35, 10.0, -25.0);
+        this._trackingCamera.lookAt(0, 2.5, 20.0);
+      }
+    }
+
+    // Wheel rotation and road movement synchronized with canonical simulation
+    const vr = this.vehicleRoutes?.[this.selectedVehicle];
+    const prog = this._routeProgressions?.[this.selectedVehicle] || 0;
+    const pos = vr ? interpolateRoute(vr.waypoints, prog) : { travelMeters: prog * 1000, lng: 116.82, lat: -1.22 };
+
+    const wheelAngle = ((pos.travelMeters || 0) / 0.52) % (Math.PI * 2);
+    for (const w of this._trackingWheels) {
+      w.rotation.x = wheelAngle;
+    }
+
+    // Smooth dash line movement for motion cues
+    if (this._trackingDashGroup) {
+      this._trackingDashGroup.position.z = ((pos.travelMeters || 0) % 6);
+    }
+
+    // Update Context Mini-Map inset
+    this._updateContextMiniMap(pos, this.selectedVehicle);
+
+    // Update Top-left badge to Option B provenance
+    const geoBadge = document.getElementById('map-geo-badge');
+    if (geoBadge) {
+      geoBadge.textContent = 'LIVE GEOGRAPHY • BALIKPAPAN | SIMULATED 3D VIEW';
+    }
+
+    // Synchronize underlying MapLibre camera without causing digital zoom blur
+    this._updateCameraTracking();
+  }
+
+  /**
+   * Updates Option B Context Mini-Map inset with real Balikpapan corridor path and vehicle marker.
+   */
+  _updateContextMiniMap(pos, index) {
+    const miniMap = document.getElementById('context-mini-map');
+    if (!miniMap) return;
+    miniMap.style.display = 'flex';
+
+    const vr = this.vehicleRoutes?.[index];
+    const fromName = HUBS[vr?.from]?.name || vr?.from || 'Kariangau';
+    const toName = HUBS[vr?.to]?.name || vr?.to || 'KM 13';
+    const truckId = `TRK-${String(index + 1).padStart(3, '0')}`;
+
+    const elId = document.getElementById('mini-map-id');
+    if (elId) elId.textContent = truckId;
+    const elRoute = document.getElementById('mini-map-route-name');
+    if (elRoute) elRoute.textContent = `${fromName} → ${toName}`;
+
+    // Move vehicle dot along the route path
+    const prog = this._routeProgressions?.[index] || 0;
+    const cx = 15 + prog * (140 - 15);
+    const cy = 44 - Math.sin(prog * Math.PI) * 18 - prog * 8;
+    const dot = document.getElementById('mini-map-vehicle-dot');
+    if (dot) {
+      dot.setAttribute('cx', String(Math.round(cx)));
+      dot.setAttribute('cy', String(Math.round(cy)));
+    }
+  }
+
+  /**
+   * Calculates exact 2D screen projected bounding box of the active truck in pixels.
+   * Enables geometric non-occlusion assertions and collision-free callout badge positioning.
+   *
+   * @param {number} index - Vehicle index
+   * @returns {object} { minX, maxX, minY, maxY, width, height, centerX, centerY }
+   */
+  getScreenBoundingBox(index = this.selectedVehicle) {
+    const canvas = this.map ? this.map.getCanvas() : null;
+    const width = canvas ? (canvas.clientWidth || canvas.width) : 1440;
+    const height = canvas ? (canvas.clientHeight || canvas.height) : 900;
+    const rect = canvas ? canvas.getBoundingClientRect() : { left: 0, top: 0 };
+    const THREE_NS = this.three || window.THREE;
+
+    if (this.cameraMode === 'follow' || this.cameraMode === 'chase' || this.cameraMode === 'inspect') {
+      const cam = (this.cameraMode === 'inspect') ? this._inspectCamera : this._trackingCamera;
+      const truck = (this.cameraMode === 'inspect') ? this._inspectTruck : this._trackingTruckGroup;
+      if (!cam || !truck || !THREE_NS) {
+        return {
+          minX: Math.round(rect.left + width * 0.42),
+          maxX: Math.round(rect.left + width * 0.58),
+          minY: Math.round(rect.top + height * 0.38),
+          maxY: Math.round(rect.top + height * 0.52),
+          width: Math.round(width * 0.16),
+          height: Math.round(height * 0.14),
+          centerX: Math.round(rect.left + width * 0.5),
+          centerY: Math.round(rect.top + height * 0.45)
+        };
+      }
+
+      const box = new THREE_NS.Box3().setFromObject(truck);
+      const corners = [
+        new THREE_NS.Vector3(box.min.x, box.min.y, box.min.z),
+        new THREE_NS.Vector3(box.min.x, box.min.y, box.max.z),
+        new THREE_NS.Vector3(box.min.x, box.max.y, box.min.z),
+        new THREE_NS.Vector3(box.min.x, box.max.y, box.max.z),
+        new THREE_NS.Vector3(box.max.x, box.min.y, box.min.z),
+        new THREE_NS.Vector3(box.max.x, box.min.y, box.max.z),
+        new THREE_NS.Vector3(box.max.x, box.max.y, box.min.z),
+        new THREE_NS.Vector3(box.max.x, box.max.y, box.max.z),
+      ];
+
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const corner of corners) {
+        const p = corner.clone().project(cam);
+        const sx = rect.left + (p.x * 0.5 + 0.5) * width;
+        const sy = rect.top + (-(p.y * 0.5) + 0.5) * height;
+        if (sx < minX) minX = sx;
+        if (sx > maxX) maxX = sx;
+        if (sy < minY) minY = sy;
+        if (sy > maxY) maxY = sy;
+      }
+
+      return {
+        minX: Math.round(minX),
+        maxX: Math.round(maxX),
+        minY: Math.round(minY),
+        maxY: Math.round(maxY),
+        width: Math.round(maxX - minX),
+        height: Math.round(maxY - minY),
+        centerX: Math.round((minX + maxX) / 2),
+        centerY: Math.round((minY + maxY) / 2)
+      };
+    }
+
+    // Free / overview modes: project MapLibre coordinate
+    const vr = this.vehicleRoutes?.[index];
+    const prog = this._routeProgressions?.[index] || 0;
+    if (!this.map || !vr) {
+      return { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0, centerX: 0, centerY: 0 };
+    }
+    const pos = interpolateRoute(vr.waypoints, prog);
+    const pt = this.map.project([pos.lng, pos.lat]);
+    return {
+      minX: Math.round(rect.left + pt.x - 20),
+      maxX: Math.round(rect.left + pt.x + 20),
+      minY: Math.round(rect.top + pt.y - 12),
+      maxY: Math.round(rect.top + pt.y + 12),
+      width: 40,
+      height: 24,
+      centerX: Math.round(rect.left + pt.x),
+      centerY: Math.round(rect.top + pt.y)
+    };
+  }
+
 
   // --- __atlasCanvasLoops CONTRACT ---
 

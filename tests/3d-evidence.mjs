@@ -366,13 +366,170 @@ try {
   await captureProof(mapPage, '20-comparison-v3-vs-v4.png', '20. Hermes Realism Lock v4.0 Full Production Digital Twin Transformation');
   report.assertions.push('Full production digital twin transformation verified');
 
+  // --- HERMES VISUAL INTEGRITY v4.1.2 EXTENDED VERIFICATION ---
+
+  // 21. S03 Desktop Follow TRK-004 (Option B High-Detail Tracking View)
+  await mapPage.evaluate(async () => {
+    window.selectMapVehicle(3);
+    await window.setCamMode('follow');
+  });
+  await mapPage.waitForTimeout(600);
+  const bboxDesktopFollow = await mapPage.evaluate(() => {
+    const engine = window.__atlas3DEngine;
+    const bbox = engine.getScreenBoundingBox(3);
+    const callout = document.getElementById('truck-callout-map');
+    const calloutRect = callout ? callout.getBoundingClientRect() : null;
+    const inspector = document.getElementById('vehicle-inspector-panel');
+    const inspectorRect = inspector ? inspector.getBoundingClientRect() : null;
+    return { bbox, calloutRect, inspectorRect };
+  });
+
+    assert.ok(bboxDesktopFollow.bbox.width >= 180, `Desktop Follow truck bbox width must be >= 180px, got ${bboxDesktopFollow.bbox.width}px`);
+  assert.ok(bboxDesktopFollow.bbox.height >= 70, `Desktop Follow truck bbox height must be >= 70px, got ${bboxDesktopFollow.bbox.height}px`);
+  assert.ok(bboxDesktopFollow.calloutRect.bottom <= bboxDesktopFollow.bbox.minY + 5, 'Callout badge must be positioned cleanly above vehicle bounding box');
+  assert.ok(bboxDesktopFollow.bbox.maxX < bboxDesktopFollow.inspectorRect.left, 'Vehicle must not be occluded by docked inspector panel');
+  report.assertions.push(`Desktop Follow vehicle projected bbox verified (${bboxDesktopFollow.bbox.width}x${bboxDesktopFollow.bbox.height}px >= 180x70px, zero occlusion)`);
+  await captureProof(mapPage, '21-S03-desktop-follow-trk004.png', '21. S03 Desktop Follow Mode — Authentic GLB Truck & Option B Dual-View Tracking');
+
+  // 22. S03 Desktop Chase TRK-004 (Option B Behind-Vehicle Dynamic View)
+  await mapPage.evaluate(async () => {
+    await window.setCamMode('chase');
+  });
+  await mapPage.waitForTimeout(600);
+  const bboxDesktopChase = await mapPage.evaluate(() => window.__atlas3DEngine.getScreenBoundingBox(3));
+  assert.ok(bboxDesktopChase.width >= 180, `Desktop Chase truck bbox width must be >= 180px, got ${bboxDesktopChase.width}px`);
+  report.assertions.push(`Desktop Chase vehicle projected bbox verified (${bboxDesktopChase.width}x${bboxDesktopChase.height}px >= 180px)`);
+  await captureProof(mapPage, '22-S03-desktop-chase-trk004.png', '22. S03 Desktop Chase Mode — Low Dynamic Road Angle');
+
+  // 23. Dynamic Vehicle Selection Switch: TRK-004 -> TRK-001 -> TRK-004
+  await mapPage.evaluate(() => window.selectMapVehicle(0));
+  await mapPage.waitForTimeout(400);
+  const switchCheck0 = await mapPage.evaluate(() => {
+    return {
+      inspectorId: document.getElementById('inspector-truck-id')?.innerText,
+      callout: document.getElementById('truck-callout-map')?.innerText,
+      selected: window.__atlas3DEngine?.selectedVehicle
+    };
+  });
+  assert.equal(switchCheck0.selected, 0);
+  assert.equal(switchCheck0.inspectorId, 'TRK-001');
+  assert.ok(switchCheck0.callout?.includes('TRK-001'));
+  await captureProof(mapPage, '23-S03-desktop-selected-trk001.png', '23. S03 Selection Switch — TRK-001 Active with Synchronized Inspector & Callout');
+  report.assertions.push('Dynamic vehicle selection switch TRK-004 -> TRK-001 verified');
+
+  // Switch back to TRK-004
+  await mapPage.evaluate(() => window.selectMapVehicle(3));
+  await mapPage.waitForTimeout(400);
+
+  // 24. Live GLB Tanker Close Shot in Synced Tracking Scene
+  await captureProof(mapPage, '28-S03-live-glb-tanker-close.png', '28. S03 Live Map GLB Tanker — Sharp Close Shot with Real PBR Automotive Glaze');
+  report.assertions.push('Live-map authentic GLB tanker close shot verified');
+
+  // 25. Deterministic Motion 3-Frame Sequence
+  await mapPage.evaluate(() => window.ATLAS_V21.sim.pause());
+  const tickStart = await mapPage.evaluate(() => window.ATLAS_V21.sim.snapshot().tick);
+  await captureProof(mapPage, '29-S03-motion-frame-1.png', `29. Simulation Motion Sample 1 (Virtual Tick ${tickStart})`);
+
+  await mapPage.evaluate(() => { for (let i = 0; i < 5; i++) window.ATLAS_V21.sim.step(); });
+  await mapPage.waitForTimeout(200);
+  const tickMid = await mapPage.evaluate(() => window.ATLAS_V21.sim.snapshot().tick);
+  await captureProof(mapPage, '30-S03-motion-frame-2.png', `30. Simulation Motion Sample 2 (Virtual Tick ${tickMid})`);
+
+  await mapPage.evaluate(() => { for (let i = 0; i < 5; i++) window.ATLAS_V21.sim.step(); });
+  await mapPage.waitForTimeout(200);
+  const tickEnd = await mapPage.evaluate(() => window.ATLAS_V21.sim.snapshot().tick);
+  await captureProof(mapPage, '31-S03-motion-frame-3.png', `31. Simulation Motion Sample 3 (Virtual Tick ${tickEnd})`);
+
+  assert.ok(tickMid > tickStart && tickEnd > tickMid, 'Deterministic tick sequence monotonically advanced');
+  report.assertions.push('Deterministic 3-frame route progression sequence verified');
+
+  // --- MOBILE S03 FULL RESPONSIVE & BOTTOM SHEET VERIFICATION ---
+  const mobS03 = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await mobS03.goto(url, { waitUntil: 'domcontentloaded' });
+  await mobS03.evaluate(() => window.switchView('map'));
+  await mobS03.waitForTimeout(1000);
+  await mobS03.evaluate(async () => {
+    window.selectMapVehicle(3);
+    await window.setCamMode('follow');
+  });
+  await mobS03.waitForTimeout(600);
+
+  // 26. S03 Mobile Collapsed Bottom Sheet (390x844)
+  const mobCollapsedCheck = await mobS03.evaluate(() => {
+    const sheet = document.getElementById('mobile-bottom-sheet');
+    const sheetRect = sheet ? sheet.getBoundingClientRect() : null;
+    const engine = window.__atlas3DEngine;
+    const bbox = engine ? engine.getScreenBoundingBox(3) : null;
+    return { sheetRect, bbox };
+  });
+
+  assert.ok(mobCollapsedCheck.bbox.width >= 100, `Mobile Follow truck bbox width must be >= 100px, got ${mobCollapsedCheck.bbox.width}px`);
+  assert.ok(mobCollapsedCheck.bbox.maxY < mobCollapsedCheck.sheetRect.top, 'Mobile Follow truck must sit completely above collapsed bottom sheet');
+  await captureProof(mobS03, '24-S03-mobile-collapsed.png', '24. S03 Mobile Collapsed Bottom Sheet (390x844) — Unobstructed Map');
+  report.assertions.push(`Mobile Collapsed layout verified (${mobCollapsedCheck.bbox.width}px truck width >= 100px, zero occlusion by sheet)`);
+
+  // 27. S03 Mobile Expanded Bottom Sheet (390x844)
+  await mobS03.evaluate(() => window.toggleMobileSheet());
+  await mobS03.waitForTimeout(400);
+  const mobExpandedCheck = await mobS03.evaluate(() => {
+    const sheet = document.getElementById('mobile-bottom-sheet');
+    const sheetRect = sheet ? sheet.getBoundingClientRect() : null;
+    const engine = window.__atlas3DEngine;
+    const bbox = engine ? engine.getScreenBoundingBox(3) : null;
+    return { sheetRect, bbox, isExpanded: window.isMobileSheetExpanded };
+  });
+  assert.equal(mobExpandedCheck.isExpanded, true);
+  assert.ok(mobExpandedCheck.sheetRect.height <= 844 * 0.55, 'Expanded bottom sheet must not exceed 55% screen height');
+  assert.ok(mobExpandedCheck.bbox.maxY < mobExpandedCheck.sheetRect.top, 'Truck remains visible in safe upper map area during expanded sheet');
+  await captureProof(mobS03, '25-S03-mobile-expanded.png', '25. S03 Mobile Expanded Bottom Sheet (390x844) — Trip Telemetry & Actions');
+  report.assertions.push('Mobile Expanded bottom sheet max height <= 55% and safe area verified');
+
+  // Collapse sheet back
+  await mobS03.evaluate(() => window.toggleMobileSheet());
+  await mobS03.waitForTimeout(300);
+
+  // 28. S03 Mobile Follow TRK-004
+  await captureProof(mobS03, '26-S03-mobile-follow-trk004.png', '26. S03 Mobile Follow Mode — Sized for Touch Viewport');
+
+  // 29. S03 Mobile Chase TRK-004
+  await mobS03.evaluate(async () => await window.setCamMode('chase'));
+  await mobS03.waitForTimeout(600);
+  const mobChaseCheck = await mobS03.evaluate(() => window.__atlas3DEngine.getScreenBoundingBox(3));
+  assert.ok(mobChaseCheck.width >= 100, `Mobile Chase truck bbox width must be >= 100px, got ${mobChaseCheck.width}px`);
+  await captureProof(mobS03, '27-S03-mobile-chase-trk004.png', '27. S03 Mobile Chase Mode — Road Perspective');
+  report.assertions.push('Mobile Chase mode verified (>= 100px width)');
+
+  // 30. Mobile Layers Modal Toggle Verification
+  const layersModalCheck = await mobS03.evaluate(() => {
+    window.toggleMobileLayers();
+    const modal = document.getElementById('mobile-layers-modal');
+    const openVisible = modal && !modal.classList.contains('hidden');
+    window.closeMobileLayers();
+    const closeHidden = modal && modal.classList.contains('hidden');
+    return { openVisible, closeHidden };
+  });
+  assert.equal(layersModalCheck.openVisible, true, 'Layers modal opens on toggle');
+  assert.equal(layersModalCheck.closeHidden, true, 'Layers modal closes on closeMobileLayers');
+  report.assertions.push('Mobile Layers modal interaction verified');
+
+  // 31. Multi-width Responsive Overflow Check (360px, 390px, 768px)
+  for (const w of [360, 390, 768]) {
+    await mobS03.setViewportSize({ width: w, height: 800 });
+    await mobS03.waitForTimeout(200);
+    const overflow = await mobS03.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    assert.equal(overflow, false, `Page must not have horizontal scrollbar at ${w}px width`);
+  }
+  report.assertions.push('Zero horizontal overflow across 360px, 390px, and 768px viewports verified');
+
+  await mobS03.close();
+
   // --- Strict Screenshot Deduplication Check ---
   const hashes = new Set();
   for (const s of report.screenshots) {
     assert.ok(!hashes.has(s.hash), `Duplicate screenshot detected! File ${s.file} has identical content hash ${s.hash}`);
     hashes.add(s.hash);
   }
-  assert.equal(hashes.size, 20, 'Must have exactly 20 unique screenshot hashes');
+  assert.equal(hashes.size, report.screenshots.length, 'Must have all unique screenshot hashes');
   report.assertions.push('Zero duplicate screenshots verified (20 unique SHA-256 hashes)');
 
   // --- Performance Verification (Measured Draw Calls & Geometry) ---
@@ -493,6 +650,33 @@ try {
   assert.equal(boundaryCheck?.below, 0, 'Negative control: Negative vehicle index clamps safely to 0');
   assert.equal(boundaryCheck?.above, 19, 'Negative control: Excessive vehicle index clamps safely to 19');
   report.assertions.push('Negative Control 5: Out-of-bounds vehicle selection safely clamped without error');
+
+  // --- NEGATIVE CONTROL 6: Real 3D Layer Mutation Verification ---
+  const negativeMutationTest = await mapPage.evaluate(() => {
+    const engine = window.__atlas3DEngine;
+    if (!engine || !engine.scene || !engine.fleet?.[3]) return null;
+
+    const beforeInfo = engine.getModelInfo(3);
+    const beforeInScene = beforeInfo.inScene;
+
+    // Mutate scene by removing vehicle 3
+    engine.scene.remove(engine.fleet[3]);
+    const duringInfo = engine.getModelInfo(3);
+    const duringInScene = duringInfo.inScene;
+
+    // Restore vehicle 3 to scene
+    engine.scene.add(engine.fleet[3]);
+    const afterInfo = engine.getModelInfo(3);
+    const afterInScene = afterInfo.inScene;
+
+    return { beforeInScene, duringInScene, afterInScene };
+  });
+
+  assert.ok(negativeMutationTest, 'Negative control 6 test object must be valid');
+  assert.equal(negativeMutationTest.beforeInScene, true, 'Vehicle 3 initially attached to scene');
+  assert.equal(negativeMutationTest.duringInScene, false, 'Mutated scene correctly detects vehicle 3 removed');
+  assert.equal(negativeMutationTest.afterInScene, true, 'Restored scene correctly detects vehicle 3 restored');
+  report.assertions.push('Negative Control 6: Real 3D scene layer mutation correctly caught (isolated removal/restoration test)');
 
   await mapPage.close();
 

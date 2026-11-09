@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 390 844">
+<rect width="390" height="844" fill="#10141A"/>
+<rect x="0" y="0" width="390" height="62" rx="0" fill="#151B22"/>
+<text x="17" y="26" font-family="Arial,DejaVu Sans,sans-serif" font-size="21" font-weight="700" fill="#DCA876">←</text>
+<text x="48" y="26" font-family="Arial,DejaVu Sans,sans-serif" font-size="18" font-weight="700" fill="#F5F1E9">Live Fleet Map</text>
+<text x="48" y="47" font-family="Arial,DejaVu Sans,sans-serif" font-size="11" font-weight="400" fill="#A4B5BC">Kariangau · 20 synthetic trucks</text>
+<rect x="303" y="14" width="72" height="30" rx="8" fill="#28333B"/>
+<text x="339.0" y="33.0" font-family="Arial,DejaVu Sans,sans-serif" font-size="12" font-weight="700" fill="#F5F1E9" text-anchor="middle">Layers</text>
+<rect x="12" y="70" width="366" height="49" rx="10" fill="#151B22" stroke="#39464F" stroke-width="1"/>
+<rect x="20" y="77" width="67" height="35" rx="8" fill="#28333B"/>
+<text x="53.5" y="98.5" font-family="Arial,DejaVu Sans,sans-serif" font-size="12" font-weight="700" fill="#F5F1E9" text-anchor="middle">Map</text>
+<rect x="93" y="77" width="84" height="35" rx="8" fill="#DCA876"/>
+<text x="135.0" y="98.5" font-family="Arial,DejaVu Sans,sans-serif" font-size="12" font-weight="700" fill="#10141A" text-anchor="middle">Follow</text>
+<rect x="185" y="77" width="76" height="35" rx="8" fill="#28333B"/>
+<text x="223.0" y="98.5" font-family="Arial,DejaVu Sans,sans-serif" font-size="12" font-weight="700" fill="#F5F1E9" text-anchor="middle">Chase</text>
+<rect x="268" y="77" width="62" height="35" rx="8" fill="#28333B"/>
+<text x="299.0" y="98.5" font-family="Arial,DejaVu Sans,sans-serif" font-size="12" font-weight="700" fill="#F5F1E9" text-anchor="middle">Fit</text>
+<rect x="12" y="127" width="366" height="395" rx="10" fill="#112A30" stroke="#39464F" stroke-width="1"/>
+<svg x="14" y="129" width="362" height="391" viewBox="0 0 362 391" overflow="hidden">
+<path d="M -55 268.6 C 91.5 296.25 201.3 165.9 421 110.60000000000001" fill="none" stroke="#2A4750" stroke-width="160" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+<path d="M -55 268.6 C 91.5 296.25 201.3 165.9 421 110.60000000000001" fill="none" stroke="#68818A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.75" stroke-dasharray="16 22"/>
+<rect x="60.0" y="35" width="58" height="34" rx="3" fill="#284148" stroke="#46616A" stroke-width="1"/>
+<rect x="155.16" y="85" width="58" height="34" rx="3" fill="#284148" stroke="#46616A" stroke-width="1"/>
+<rect x="250.32" y="35" width="58" height="34" rx="3" fill="#284148" stroke="#46616A" stroke-width="1"/>
+<rect x="345.48" y="85" width="58" height="34" rx="3" fill="#284148" stroke="#46616A" stroke-width="1"/>
+</svg>
+<rect x="28" y="143" width="212" height="28" rx="7" fill="#151B22"/>
+<text x="40" y="162" font-family="Arial,DejaVu Sans,sans-serif" font-size="10" font-weight="700" fill="#65C9B6">LIVE GEOGRAPHY • BALIKPAPAN</text>
+<text x="358" y="505" font-family="Arial,DejaVu Sans,sans-serif" font-size="10" font-weight="400" fill="#6F8790" text-anchor="end">SCHEMATIC WIREFRAME — NOT ACTUAL GEO DATA</text>
+<g transform="translate(191,331) scale(0.65)">
+<rect x="-122" y="-38" width="172" height="66" rx="8" fill="#D5DDDF" stroke="#778E98" stroke-width="2"/>
+<rect x="51" y="-35" width="68" height="63" rx="10" fill="#E4E7E2" stroke="#778E98" stroke-width="2"/>
+<rect x="68" y="-21" width="41" height="22" rx="4" fill="#203D45"/>
+<rect x="54" y="24" width="63" height="8" rx="2" fill="#485C61"/>
+<rect x="-111" y="-27" width="120" height="5" rx="2" fill="#F5F5F0"/>
+<rect x="30" y="-4" width="19" height="12" rx="2" fill="#C7A982"/>
+<circle cx="-79" cy="36" r="15" fill="#111519" stroke="#819198" stroke-width="2"/>
+<circle cx="-79" cy="36" r="6" fill="#8A9CA2"/>
+<circle cx="-25" cy="36" r="15" fill="#111519" stroke="#819198" stroke-width="2"/>
+<circle cx="-25" cy="36" r="6" fill="#8A9CA2"/>
+<circle cx="71" cy="36" r="15" fill="#111519" stroke="#819198" stroke-width="2"/>
+<circle cx="71" cy="36" r="6" fill="#8A9CA2"/>
+<circle cx="103" cy="36" r="15" fill="#111519" stroke="#819198" stroke-width="2"/>
+<circle cx="103" cy="36" r="6" fill="#8A9CA2"/>
+</g>
+<rect x="113" y="185" width="165" height="42" rx="8" fill="#151B22" stroke="#65C9B6" stroke-width="1"/>
+<text x="194" y="202" font-family="Arial,DejaVu Sans,sans-serif" font-size="11" font-weight="700" fill="#65C9B6" text-anchor="middle">TRK-004  •  47 km/h</text>
+<text x="194" y="218" font-family="Arial,DejaVu Sans,sans-serif" font-size="10" font-weight="400" fill="#A4B5BC" text-anchor="middle">selected • simulation</text>
+<rect x="12" y="529" width="366" height="251" rx="12" fill="#1C252D" stroke="#39464F" stroke-width="1"/>
+<rect x="164" y="539" width="62" height="4" rx="2" fill="#A4B5BC"/>
+<text x="29" y="570" font-family="Arial,DejaVu Sans,sans-serif" font-size="20" font-weight="700" fill="#F5F1E9">TRK-004</text>
+<rect x="236" y="549" width="123" height="29" rx="8" fill="#234A47"/>
+<text x="297.5" y="567.5" font-family="Arial,DejaVu Sans,sans-serif" font-size="10" font-weight="700" fill="#F5F1E9" text-anchor="middle">IN TRANSIT</text>
+<text x="29" y="603" font-family="Arial,DejaVu Sans,sans-serif" font-size="12" font-weight="400" fill="#A4B5BC">Dewi Lestari  •  MT Haryono → Sepinggan</text>
+<line x1="29" y1="620" x2="358" y2="620" stroke="#39464F" stroke-width="1" opacity="1"/>
+<text x="29" y="645" font-family="Arial,DejaVu Sans,sans-serif" font-size="18" font-weight="700" fill="#F5F1E9">47 km/h</text>
+<text x="220" y="645" font-family="Arial,DejaVu Sans,sans-serif" font-size="18" font-weight="700" fill="#65C9B6">16 min ETA</text>
+<text x="29" y="670" font-family="Arial,DejaVu Sans,sans-serif" font-size="11" font-weight="400" fill="#A4B5BC">SIMULATED • virtual tick 152</text>
+<rect x="28" y="691" width="157" height="46" rx="8" fill="#DCA876"/>
+<text x="106.5" y="718.0" font-family="Arial,DejaVu Sans,sans-serif" font-size="12" font-weight="700" fill="#10141A" text-anchor="middle">Exit follow</text>
+<rect x="194" y="691" width="165" height="46" rx="8" fill="#28333B"/>
+<text x="276.5" y="718.0" font-family="Arial,DejaVu Sans,sans-serif" font-size="12" font-weight="700" fill="#F5F1E9" text-anchor="middle">Trip details</text>
+<text x="195" y="765" font-family="Arial,DejaVu Sans,sans-serif" font-size="10" font-weight="400" fill="#A4B5BC" text-anchor="middle">↓ collapse to reveal map</text>
+<rect x="12" y="787" width="366" height="46" rx="10" fill="#151B22" stroke="#39464F" stroke-width="1"/>
+<rect x="23" y="793" width="75" height="34" rx="8" fill="#DCA876"/>
+<text x="60.5" y="814.0" font-family="Arial,DejaVu Sans,sans-serif" font-size="12" font-weight="700" fill="#10141A" text-anchor="middle">Pause</text>
+<text x="356" y="814" font-family="Arial,DejaVu Sans,sans-serif" font-size="12" font-weight="700" fill="#65C9B6" text-anchor="end">08:14 WITA</text>
+</svg>
