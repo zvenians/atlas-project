@@ -484,9 +484,12 @@ try {
   await captureProof(mobS03, '25-S03-mobile-expanded.png', '25. S03 Mobile Expanded Bottom Sheet (390x844) — Trip Telemetry & Actions');
   report.assertions.push('Mobile Expanded bottom sheet max height <= 55% and safe area verified');
 
-  // Collapse sheet back
-  await mobS03.evaluate(() => window.toggleMobileSheet());
-  await mobS03.waitForTimeout(300);
+  // Collapse sheet back and advance simulation step for active motion capture
+  await mobS03.evaluate(() => {
+    window.toggleMobileSheet();
+    window.ATLAS_V21?.sim?.step();
+  });
+  await mobS03.waitForTimeout(400);
 
   // 28. S03 Mobile Follow TRK-004
   await captureProof(mobS03, '26-S03-mobile-follow-trk004.png', '26. S03 Mobile Follow Mode — Sized for Touch Viewport');
