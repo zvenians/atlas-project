@@ -1403,6 +1403,180 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     this._trackingRoadGroup.name = 'tracking-curved-road-group';
     scene.add(this._trackingRoadGroup);
 
+    // Dedicated buffer pool for curved road ribbons (Zero per-frame garbage collection)
+    const MAX_RIBBON_SAMPLES = 128;
+    const createRibbonGeo = (maxPts) => {
+      const pos = new Float32Array(maxPts * 2 * 3);
+      const norm = new Float32Array(maxPts * 2 * 3);
+      const uv = new Float32Array(maxPts * 2 * 2);
+      const indices = [];
+      for (let i = 0; i < maxPts - 1; i++) {
+        const v0 = i * 2, v1 = i * 2 + 1, v2 = (i + 1) * 2, v3 = (i + 1) * 2 + 1;
+        indices.push(v0, v2, v1);
+        indices.push(v1, v2, v3);
+      }
+      for (let i = 0; i < maxPts * 2; i++) {
+        norm[i * 3 + 1] = 1.0;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(norm, 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      geo.setIndex(indices);
+      geo.setDrawRange(0, 0);
+      return geo;
+    };
+
+    const createDashesGeo = (maxDashes = 64) => {
+      const pos = new Float32Array(maxDashes * 4 * 3);
+      const norm = new Float32Array(maxDashes * 4 * 3);
+      const indices = [];
+      for (let i = 0; i < maxDashes; i++) {
+        const v = i * 4;
+        indices.push(v, v + 2, v + 1);
+        indices.push(v + 1, v + 2, v + 3);
+        norm[v * 3 + 1] = 1.0;
+        norm[(v + 1) * 3 + 1] = 1.0;
+        norm[(v + 2) * 3 + 1] = 1.0;
+        norm[(v + 3) * 3 + 1] = 1.0;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(norm, 3));
+      geo.setIndex(indices);
+      geo.setDrawRange(0, 0);
+      return geo;
+    };
+
+    this._trackingGeos = {
+      road: createRibbonGeo(MAX_RIBBON_SAMPLES),
+      dash: createDashesGeo(64),
+      leftFog: createRibbonGeo(MAX_RIBBON_SAMPLES),
+      rightFog: createRibbonGeo(MAX_RIBBON_SAMPLES),
+      leftCurb: createRibbonGeo(MAX_RIBBON_SAMPLES),
+      rightCurb: createRibbonGeo(MAX_RIBBON_SAMPLES),
+      leftGuardrail: createRibbonGeo(MAX_RIBBON_SAMPLES),
+      rightGuardrail: createRibbonGeo(MAX_RIBBON_SAMPLES),
+    };
+
+    this._trackingRoadGroup.add(new THREE.Mesh(this._trackingGeos.road, this._trackingMaterials.road));
+    this._trackingRoadGroup.add(new THREE.Mesh(this._trackingGeos.dash, this._trackingMaterials.dash));
+    this._trackingRoadGroup.add(new THREE.Mesh(this._trackingGeos.leftFog, this._trackingMaterials.fogLine));
+    this._trackingRoadGroup.add(new THREE.Mesh(this._trackingGeos.rightFog, this._trackingMaterials.fogLine));
+    this._trackingRoadGroup.add(new THREE.Mesh(this._trackingGeos.leftCurb, this._trackingMaterials.curb));
+    this._trackingRoadGroup.add(new THREE.Mesh(this._trackingGeos.rightCurb, this._trackingMaterials.curb));
+    this._trackingRoadGroup.add(new THREE.Mesh(this._trackingGeos.leftGuardrail, this._trackingMaterials.guardrail));
+    this._trackingRoadGroup.add(new THREE.Mesh(this._trackingGeos.rightGuardrail, this._trackingMaterials.guardrail));
+
+    // Object pool for Guardrail Posts (60 pre-allocated meshes)
+    this._trackingPostPool = [];
+    const postGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.8, 8);
+    for (let p = 0; p < 60; p++) {
+      const post = new THREE.Mesh(postGeo, this._trackingMaterials.guardrail);
+      post.visible = false;
+      this._trackingRoadGroup.add(post);
+      this._trackingPostPool.push(post);
+    }
+
+    // Object pool for Highway LED Light Poles (20 pre-allocated groups)
+    this._trackingPolePool = [];
+    const poleGeo = new THREE.CylinderGeometry(0.1, 0.14, 8.5, 8);
+    const armGeo = new THREE.BoxGeometry(2.2, 0.08, 0.08);
+    const lampGeo = new THREE.BoxGeometry(0.6, 0.12, 0.25);
+    for (let lp = 0; lp < 20; lp++) {
+      const poleGroup = new THREE.Group();
+      const pole = new THREE.Mesh(poleGeo, this._trackingMaterials.lampPole);
+      pole.position.y = 4.25;
+      poleGroup.add(pole);
+
+      const arm = new THREE.Mesh(armGeo, this._trackingMaterials.lampPole);
+      arm.position.set(-0.8, 8.5, 0);
+      poleGroup.add(arm);
+
+      const lamp = new THREE.Mesh(lampGeo, this._trackingMaterials.lampHead);
+      lamp.position.set(-1.8, 8.44, 0);
+      poleGroup.add(lamp);
+
+      poleGroup.visible = false;
+      this._trackingRoadGroup.add(poleGroup);
+      this._trackingPolePool.push(poleGroup);
+    }
+
+    // Object pool for Scenery: Warehouses, Container Stacks, Port Cranes (16 pre-allocated groups)
+    this._trackingSceneryPool = [];
+    const whGeo = new THREE.BoxGeometry(24, 11, 36);
+    const roofPitchedGeo = new THREE.ConeGeometry(24 * 0.72, 3.5, 4);
+    roofPitchedGeo.rotateY(Math.PI / 4);
+    roofPitchedGeo.scale(1, 1, 36 / 24);
+
+    for (let sc = 0; sc < 16; sc++) {
+      const scGroup = new THREE.Group();
+      if (sc % 3 === 0) {
+        // High-Bay Industrial Warehouse with Loading Dock Doors
+        const whMat = this._trackingMaterials.warehouse[sc % this._trackingMaterials.warehouse.length];
+        const whBody = new THREE.Mesh(whGeo, whMat);
+        whBody.position.y = 5.5;
+        scGroup.add(whBody);
+
+        const roof = new THREE.Mesh(roofPitchedGeo, whMat);
+        roof.position.y = 12.5;
+        scGroup.add(roof);
+
+        // Loading Dock Doors with rubber dock seals
+        for (let d = -1; d <= 1; d++) {
+          const dockDoor = new THREE.Mesh(
+            new THREE.BoxGeometry(4.2, 4.8, 0.1),
+            this._trackingMaterials.curb
+          );
+          dockDoor.position.set(d * 6.5, 2.5, 18.05);
+          scGroup.add(dockDoor);
+        }
+      } else if (sc % 3 === 1) {
+        // Multi-tier Intermodal Container Yard Stacks (40ft ISO Containers stacked 3-high)
+        const contColors = [0x0A5C80, 0x006837, 0xEA580C, 0xF1F5F9, 0xBE185D];
+        for (let row = 0; row < 2; row++) {
+          for (let tier = 0; tier < 3; tier++) {
+            const cMat = new THREE.MeshStandardMaterial({
+              color: contColors[(sc + row * 2 + tier) % contColors.length],
+              roughness: 0.5,
+              metalness: 0.3
+            });
+            const contMesh = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.6, 12.2), cMat);
+            contMesh.position.set(row * 3.2 - 1.6, 1.3 + tier * 2.6, 0);
+            scGroup.add(contMesh);
+          }
+        }
+      } else {
+        // Port STS (Ship-to-Shore) Container Gantry Crane Silhouette
+        const craneMat = new THREE.MeshStandardMaterial({ color: 0xDC2626, roughness: 0.4, metalness: 0.6 });
+        const towerGeo = new THREE.BoxGeometry(0.8, 22, 0.8);
+        for (const legX of [-4, 4]) {
+          for (const legZ of [-4, 4]) {
+            const leg = new THREE.Mesh(towerGeo, craneMat);
+            leg.position.set(legX, 11, legZ);
+            scGroup.add(leg);
+          }
+        }
+        // Top Horizontal Boom
+        const boomGeo = new THREE.BoxGeometry(1.6, 1.6, 34);
+        const boom = new THREE.Mesh(boomGeo, craneMat);
+        boom.position.set(0, 22, 5);
+        scGroup.add(boom);
+
+        // Warning obstruction beacon
+        const beacon = new THREE.Mesh(
+          new THREE.SphereGeometry(0.3, 8, 8),
+          new THREE.MeshBasicMaterial({ color: 0xEF4444 })
+        );
+        beacon.position.set(0, 23.5, 5);
+        scGroup.add(beacon);
+      }
+
+      scGroup.visible = false;
+      this._trackingRoadGroup.add(scGroup);
+      this._trackingSceneryPool.push(scGroup);
+    }
+
     // Dedicated truck mount group
     this._trackingTruckGroup = new THREE.Group();
     this._trackingTruckGroup.name = 'tracking-truck-mount';
@@ -1414,20 +1588,19 @@ _updateCalloutPosition(index = this.selectedVehicle) {
 
   /**
    * Updates dynamically extruded 3D curved road ribbon along the active route corridor.
-   * Generates asphalt mesh, center dashes, outer fog lines, curbs, guardrails, and poles
-   * curving identically to verified OpenStreetMap highway alignment.
+   * Leverages pre-allocated GPU buffer pools for zero per-frame rebuilding and zero GC pressure.
    */
   _updateCurvedRoadGeometry(THREE, samples, travelMeters) {
     if (!this._trackingRoadGroup || !samples || samples.length < 2) return;
+    const geos = this._trackingGeos;
+    if (!geos) return;
 
-    // Helper: build curved ribbon along centerline samples
-    function buildCurvedRibbon(samples, lateralCenter, width, yOffset) {
-      const numSamples = samples.length;
-      const posArr = new Float32Array(numSamples * 2 * 3);
-      const normArr = new Float32Array(numSamples * 2 * 3);
-      const uvArr = new Float32Array(numSamples * 2 * 2);
-      const indices = [];
+    const numSamples = Math.min(samples.length, 128);
 
+    // Helper: in-place ribbon update
+    function updateRibbon(geo, lateralCenter, width, yOffset) {
+      const posArr = geo.attributes.position.array;
+      const uvArr = geo.attributes.uv.array;
       const halfW = width / 2;
       for (let i = 0; i < numSamples; i++) {
         const s = samples[i];
@@ -1438,143 +1611,113 @@ _updateCalloutPosition(index = this.selectedVehicle) {
         posArr[i * 6 + 0] = cx - s.nx * halfW;
         posArr[i * 6 + 1] = yOffset;
         posArr[i * 6 + 2] = cz - s.nz * halfW;
-        normArr[i * 6 + 0] = 0; normArr[i * 6 + 1] = 1; normArr[i * 6 + 2] = 0;
-        uvArr[i * 4 + 0] = 0; uvArr[i * 4 + 1] = s.dist / 8;
+        uvArr[i * 4 + 0] = 0;
+        uvArr[i * 4 + 1] = s.dist / 8;
 
         // Right vertex
         posArr[i * 6 + 3] = cx + s.nx * halfW;
         posArr[i * 6 + 4] = yOffset;
         posArr[i * 6 + 5] = cz + s.nz * halfW;
-        normArr[i * 6 + 3] = 0; normArr[i * 6 + 4] = 1; normArr[i * 6 + 5] = 0;
-        uvArr[i * 4 + 2] = 1; uvArr[i * 4 + 3] = s.dist / 8;
-
-        if (i < numSamples - 1) {
-          const v0 = i * 2, v1 = i * 2 + 1, v2 = (i + 1) * 2, v3 = (i + 1) * 2 + 1;
-          indices.push(v0, v2, v1);
-          indices.push(v1, v2, v3);
-        }
+        uvArr[i * 4 + 2] = 1;
+        uvArr[i * 4 + 3] = s.dist / 8;
       }
-
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
-      geo.setAttribute('normal', new THREE.BufferAttribute(normArr, 3));
-      geo.setAttribute('uv', new THREE.BufferAttribute(uvArr, 2));
-      geo.setIndex(indices);
-      return geo;
+      geo.attributes.position.needsUpdate = true;
+      geo.attributes.uv.needsUpdate = true;
+      geo.setDrawRange(0, (numSamples - 1) * 6);
     }
-
-    // Helper: build center dashed markings
-    function buildCenterDashes(samples, yOffset = 0.015) {
-      const positions = [];
-      const normals = [];
-      const indices = [];
-      let vertCount = 0;
-
-      for (let i = 0; i < samples.length - 1; i++) {
-        const s0 = samples[i];
-        const s1 = samples[i + 1];
-        if ((s0.dist % 6.0) < 3.2) {
-          const halfW = 0.11;
-          const p0L = [s0.x - s0.nx * halfW, yOffset, s0.z - s0.nz * halfW];
-          const p0R = [s0.x + s0.nx * halfW, yOffset, s0.z + s0.nz * halfW];
-          const p1L = [s1.x - s1.nx * halfW, yOffset, s1.z - s1.nz * halfW];
-          const p1R = [s1.x + s1.nx * halfW, yOffset, s1.z + s1.nz * halfW];
-
-          positions.push(...p0L, ...p0R, ...p1L, ...p1R);
-          normals.push(0, 1, 0,  0, 1, 0,  0, 1, 0,  0, 1, 0);
-
-          indices.push(vertCount, vertCount + 2, vertCount + 1);
-          indices.push(vertCount + 1, vertCount + 2, vertCount + 3);
-          vertCount += 4;
-        }
-      }
-
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
-      geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normals), 3));
-      geo.setIndex(indices);
-      return geo;
-    }
-
-    // Clear old road meshes cleanly
-    while (this._trackingRoadGroup.children.length > 0) {
-      const child = this._trackingRoadGroup.children[0];
-      if (child.geometry) child.geometry.dispose();
-      this._trackingRoadGroup.remove(child);
-    }
-
-    const mats = this._trackingMaterials;
 
     // 1. Asphalt Road Surface (14m wide)
-    const roadGeo = buildCurvedRibbon(samples, 0, 14, 0);
-    this._trackingRoadGroup.add(new THREE.Mesh(roadGeo, mats.road));
+    updateRibbon(geos.road, 0, 14, 0);
 
     // 2. Center Dashed Line Markings
-    const dashGeo = buildCenterDashes(samples, 0.015);
-    this._trackingRoadGroup.add(new THREE.Mesh(dashGeo, mats.dash));
+    const dashPosArr = geos.dash.attributes.position.array;
+    let dashCount = 0;
+    const maxDashes = 64;
+    const yDash = 0.015;
+    const halfDashW = 0.11;
 
-    // 3. Fog Lines (outer edge lines at +/- 5.5m)
-    const leftFogGeo = buildCurvedRibbon(samples, -5.5, 0.24, 0.012);
-    this._trackingRoadGroup.add(new THREE.Mesh(leftFogGeo, mats.fogLine));
-    const rightFogGeo = buildCurvedRibbon(samples, 5.5, 0.24, 0.012);
-    this._trackingRoadGroup.add(new THREE.Mesh(rightFogGeo, mats.fogLine));
+    for (let i = 0; i < numSamples - 1 && dashCount < maxDashes; i++) {
+      const s0 = samples[i];
+      const s1 = samples[i + 1];
+      if ((s0.dist % 6.0) < 3.2) {
+        const base = dashCount * 12;
+        dashPosArr[base + 0] = s0.x - s0.nx * halfDashW;
+        dashPosArr[base + 1] = yDash;
+        dashPosArr[base + 2] = s0.z - s0.nz * halfDashW;
 
-    // 4. Concrete Curbs (+/- 6.5m)
-    const leftCurbGeo = buildCurvedRibbon(samples, -6.5, 1.4, 0.07);
-    this._trackingRoadGroup.add(new THREE.Mesh(leftCurbGeo, mats.curb));
-    const rightCurbGeo = buildCurvedRibbon(samples, 6.5, 1.4, 0.07);
-    this._trackingRoadGroup.add(new THREE.Mesh(rightCurbGeo, mats.curb));
+        dashPosArr[base + 3] = s0.x + s0.nx * halfDashW;
+        dashPosArr[base + 4] = yDash;
+        dashPosArr[base + 5] = s0.z + s0.nz * halfDashW;
 
-    // 5. Guardrail Beams (+/- 7.6m)
-    const leftBeamGeo = buildCurvedRibbon(samples, -7.6, 0.12, 0.55);
-    this._trackingRoadGroup.add(new THREE.Mesh(leftBeamGeo, mats.guardrail));
-    const rightBeamGeo = buildCurvedRibbon(samples, 7.6, 0.12, 0.55);
-    this._trackingRoadGroup.add(new THREE.Mesh(rightBeamGeo, mats.guardrail));
+        dashPosArr[base + 6] = s1.x - s1.nx * halfDashW;
+        dashPosArr[base + 7] = yDash;
+        dashPosArr[base + 8] = s1.z - s1.nz * halfDashW;
 
-    // 6. Guardrail Posts (spaced every 6m along curve)
-    const postGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.8, 8);
-    for (let i = 0; i < samples.length; i += 3) {
-      const s = samples[i];
-      for (const side of [-7.6, 7.6]) {
-        const post = new THREE.Mesh(postGeo, mats.guardrail);
-        post.position.set(s.x + s.nx * side, 0.4, s.z + s.nz * side);
-        this._trackingRoadGroup.add(post);
+        dashPosArr[base + 9] = s1.x + s1.nx * halfDashW;
+        dashPosArr[base + 10] = yDash;
+        dashPosArr[base + 11] = s1.z + s1.nz * halfDashW;
+
+        dashCount++;
       }
     }
+    geos.dash.attributes.position.needsUpdate = true;
+    geos.dash.setDrawRange(0, dashCount * 6);
 
-    // 7. Modern Highway LED Lighting Poles (spaced every ~28m along right shoulder at +9.0m)
-    const poleGeo = new THREE.CylinderGeometry(0.1, 0.14, 8.5, 8);
-    const armGeo = new THREE.BoxGeometry(2.2, 0.08, 0.08);
-    const lampGeo = new THREE.BoxGeometry(0.6, 0.12, 0.25);
-    for (let i = 0; i < samples.length; i += 11) {
+    // 3. Fog Lines (outer edge lines at +/- 5.5m)
+    updateRibbon(geos.leftFog, -5.5, 0.24, 0.012);
+    updateRibbon(geos.rightFog, 5.5, 0.24, 0.012);
+
+    // 4. Concrete Curbs (+/- 6.5m)
+    updateRibbon(geos.leftCurb, -6.5, 1.4, 0.07);
+    updateRibbon(geos.rightCurb, 6.5, 1.4, 0.07);
+
+    // 5. Guardrail Beams (+/- 7.6m)
+    updateRibbon(geos.leftGuardrail, -7.6, 0.12, 0.55);
+    updateRibbon(geos.rightGuardrail, 7.6, 0.12, 0.55);
+
+    // 6. Guardrail Posts from Pool
+    let postIdx = 0;
+    for (let i = 0; i < numSamples; i += 3) {
       const s = samples[i];
-      const poleGroup = new THREE.Group();
-      poleGroup.position.set(s.x + s.nx * 9.0, 0, s.z + s.nz * 9.0);
-
-      const pole = new THREE.Mesh(poleGeo, mats.lampPole);
-      pole.position.y = 4.25;
-      poleGroup.add(pole);
-
-      const arm = new THREE.Mesh(armGeo, mats.lampPole);
-      arm.position.set(-0.8, 8.5, 0);
-      poleGroup.add(arm);
-
-      const lamp = new THREE.Mesh(lampGeo, mats.lampHead);
-      lamp.position.set(-1.8, 8.44, 0);
-      poleGroup.add(lamp);
-
-      this._trackingRoadGroup.add(poleGroup);
+      for (const side of [-7.6, 7.6]) {
+        if (postIdx < this._trackingPostPool.length) {
+          const post = this._trackingPostPool[postIdx++];
+          post.position.set(s.x + s.nx * side, 0.4, s.z + s.nz * side);
+          post.visible = true;
+        }
+      }
+    }
+    for (let p = postIdx; p < this._trackingPostPool.length; p++) {
+      this._trackingPostPool[p].visible = false;
     }
 
-    // 8. Distant Industrial Warehouses / Port Silhouettes along corridor
-    const whGeo = new THREE.BoxGeometry(20, 10, 32);
-    for (let i = 2; i < samples.length; i += 15) {
-      const s = samples[i];
-      const side = (i % 30 === 2) ? -32 : 32;
-      const mat = mats.warehouse[(i / 15 | 0) % mats.warehouse.length];
-      const wh = new THREE.Mesh(whGeo, mat);
-      wh.position.set(s.x + s.nx * side, 5.0, s.z + s.nz * side);
-      this._trackingRoadGroup.add(wh);
+    // 7. Highway LED Lighting Poles from Pool
+    let poleIdx = 0;
+    for (let i = 0; i < numSamples; i += 11) {
+      if (poleIdx < this._trackingPolePool.length) {
+        const s = samples[i];
+        const poleGroup = this._trackingPolePool[poleIdx++];
+        poleGroup.position.set(s.x + s.nx * 9.0, 0, s.z + s.nz * 9.0);
+        poleGroup.visible = true;
+      }
+    }
+    for (let lp = poleIdx; lp < this._trackingPolePool.length; lp++) {
+      this._trackingPolePool[lp].visible = false;
+    }
+
+    // 8. Industrial Warehouses / Container Yards / Port Cranes from Pool
+    let scIdx = 0;
+    for (let i = 2; i < numSamples; i += 15) {
+      if (scIdx < this._trackingSceneryPool.length) {
+        const s = samples[i];
+        const side = (i % 30 === 2) ? -32 : 32;
+        const scGroup = this._trackingSceneryPool[scIdx++];
+        scGroup.position.set(s.x + s.nx * side, 0, s.z + s.nz * side);
+        scGroup.visible = true;
+      }
+    }
+    for (let sc = scIdx; sc < this._trackingSceneryPool.length; sc++) {
+      this._trackingSceneryPool[sc].visible = false;
     }
   }
 

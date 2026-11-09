@@ -182,6 +182,30 @@ export function createTruckMesh(THREE, spec, index) {
   bumper.castShadow = true;
   cabGroup.add(bumper);
 
+  // Indonesian East Kalimantan Commercial License Plate (KT 8492 LP)
+  const plateBase = new THREE.Mesh(
+    new THREE.BoxGeometry(0.54, 0.16, 0.02),
+    new THREE.MeshStandardMaterial({ color: 0x0A0F1D, roughness: 0.4 })
+  );
+  plateBase.position.set(0, 0.62, cabD * 0.45 + 0.24);
+  cabGroup.add(plateBase);
+
+  const plateText = new THREE.Mesh(
+    new THREE.BoxGeometry(0.48, 0.10, 0.01),
+    new THREE.MeshBasicMaterial({ color: 0xF8FAFC })
+  );
+  plateText.position.set(0, 0.62, cabD * 0.45 + 0.252);
+  cabGroup.add(plateText);
+
+  // Front Dual Tow Hooks
+  const hookGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.12, 8);
+  hookGeo.rotateX(Math.PI / 2);
+  for (const hx of [-cabW * 0.38, cabW * 0.38]) {
+    const hook = new THREE.Mesh(hookGeo, chromeMat);
+    hook.position.set(hx, 0.52, cabD * 0.45 + 0.22);
+    cabGroup.add(hook);
+  }
+
   // Front Dual LED Headlights
   const headLightGeo = new THREE.BoxGeometry(0.36, 0.18, 0.06);
   const headLightMat = new THREE.MeshBasicMaterial({ color: 0xFFFBEB });
@@ -206,11 +230,43 @@ export function createTruckMesh(THREE, spec, index) {
   windshield.position.set(0, 1.82, cabD * 0.45 + 0.01);
   cabGroup.add(windshield);
 
+  // Twin Windshield Wipers
+  const wiperGeo = new THREE.BoxGeometry(0.02, 0.32, 0.02);
+  for (const wx of [-cabW * 0.22, cabW * 0.22]) {
+    const wiper = new THREE.Mesh(wiperGeo, darkSteelMat);
+    wiper.rotation.z = -0.15;
+    wiper.position.set(wx, 1.76, cabD * 0.45 + 0.03);
+    cabGroup.add(wiper);
+  }
+
   // Sun Visor over Windshield
   const visorGeo = new THREE.BoxGeometry(cabW * 0.92, 0.14, 0.24);
   const visor = new THREE.Mesh(visorGeo, chromeMat);
   visor.position.set(0, 2.05, cabD * 0.45 + 0.1);
   cabGroup.add(visor);
+
+  // 5 Top Cab Amber Clearance Marker Lamps
+  const markerGeo = new THREE.BoxGeometry(0.08, 0.04, 0.04);
+  const markerMat = new THREE.MeshBasicMaterial({ color: 0xF59E0B });
+  for (const mx of [-cabW * 0.35, -cabW * 0.18, 0, cabW * 0.18, cabW * 0.35]) {
+    const marker = new THREE.Mesh(markerGeo, markerMat);
+    marker.position.set(mx, 2.14, cabD * 0.45 + 0.18);
+    cabGroup.add(marker);
+  }
+
+  // Dual Chrome Roof Air Horns
+  const hornPipeGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.65, 8);
+  hornPipeGeo.rotateX(Math.PI / 2);
+  const hornBellGeo = new THREE.ConeGeometry(0.07, 0.26, 8);
+  hornBellGeo.rotateX(-Math.PI / 2);
+  for (const hx of [-cabW * 0.26, cabW * 0.26]) {
+    const hornPipe = new THREE.Mesh(hornPipeGeo, chromeMat);
+    hornPipe.position.set(hx, 0.75 + cabH * 0.82 + 0.25, -0.05);
+    cabGroup.add(hornPipe);
+    const hornBell = new THREE.Mesh(hornBellGeo, chromeMat);
+    hornBell.position.set(hx, 0.75 + cabH * 0.82 + 0.25, 0.32);
+    cabGroup.add(hornBell);
+  }
 
   // Side Windows (Driver & Passenger)
   const sideWinGeo = new THREE.PlaneGeometry(cabD * 0.42, cabH * 0.32);
@@ -279,6 +335,21 @@ export function createTruckMesh(THREE, spec, index) {
   const fifthWheel = new THREE.Mesh(fifthGeo, darkSteelMat);
   fifthWheel.position.set(0, 0.78, -1.1);
   cabGroup.add(fifthWheel);
+
+  // Coiled Pneumatic Air Brake Lines (Red Emergency, Blue Service)
+  const hoseRedMat = new THREE.MeshStandardMaterial({ color: 0xDC2626, roughness: 0.5 });
+  const hoseBlueMat = new THREE.MeshStandardMaterial({ color: 0x2563EB, roughness: 0.5 });
+  for (let seg = 0; seg < 6; seg++) {
+    const hZ = -cabD * 0.45 - 0.12 - seg * 0.1;
+    const hY = 1.3 - Math.sin((seg / 5) * Math.PI) * 0.32;
+    const redLink = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.08), hoseRedMat);
+    redLink.position.set(-0.15, hY, hZ);
+    cabGroup.add(redLink);
+
+    const blueLink = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.08), hoseBlueMat);
+    blueLink.position.set(0.15, hY, hZ);
+    cabGroup.add(blueLink);
+  }
 
   group.add(cabGroup);
 
@@ -699,25 +770,30 @@ export function createTruckMesh(THREE, spec, index) {
     return wheelGroup;
   }
 
-  // Axle positioning: 1 Front Steer Axle + 1 Mid Drive Axle + 2 Rear Tandem Axles
-  const axlePositions = [
-    // Axle 1: Front Steer Axle (under cab)
-    cabZ + cabD * 0.22,
-    // Axle 2: Drive Axle (under cab rear)
-    cabZ - cabD * 0.35,
-    // Axle 3: Trailer Tandem Axle 1
-    -spec.trailerLen / 2 + 1.8,
-    // Axle 4: Trailer Tandem Axle 2
-    -spec.trailerLen / 2 + 0.6,
+  // Axle configuration: 1 Front Steer Axle (single) + 2 Tractor Drive Axles (dual) + 2 Trailer Tandem Axles (dual)
+  const axleConfigs = [
+    { z: cabZ + cabD * 0.22, isDual: false }, // Front Steer Axle
+    { z: cabZ - cabD * 0.32, isDual: true },  // Tractor Drive 1
+    { z: cabZ - cabD * 0.78, isDual: true },  // Tractor Drive 2
+    { z: -spec.trailerLen / 2 + 1.8, isDual: true }, // Trailer Tandem 1
+    { z: -spec.trailerLen / 2 + 0.6, isDual: true }, // Trailer Tandem 2
   ];
 
   const wheelsList = [];
-  for (const az of axlePositions) {
+  for (const axle of axleConfigs) {
     for (const side of [-1, 1]) {
       const wheel = buildWheelAssembly();
-      wheel.position.set(side * (spec.width / 2 + 0.08), tireRadius, az);
+      wheel.position.set(side * (spec.width / 2 + 0.08), tireRadius, axle.z);
       group.add(wheel);
       wheelsList.push(wheel);
+
+      // If dual wheels, add inner paired wheel assembly for heavy commercial realism
+      if (axle.isDual) {
+        const innerWheel = buildWheelAssembly();
+        innerWheel.position.set(side * (spec.width / 2 - 0.24), tireRadius, axle.z);
+        group.add(innerWheel);
+        wheelsList.push(innerWheel);
+      }
     }
   }
 
@@ -870,7 +946,8 @@ export function createFleet(THREE) {
     loadHeroGLBTruck(THREE).then(glbModel => {
       if (!glbModel) return;
       for (let i = 0; i < 20; i++) {
-        if (fleet[i].userData.type === 'tanker') {
+        // Upgrade designated hero tanker (TRK-004 / index 3) with CC-BY-4.0 GLB asset
+        if (i === 3) {
           // Remove all procedural geometry children to prevent conflicting or overlapping meshes
           while (fleet[i].children.length > 0) {
             fleet[i].remove(fleet[i].children[0]);
