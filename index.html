@@ -20,7 +20,15 @@
     .glass-panel { background: rgba(17, 23, 32, 0.88); backdrop-filter: blur(12px); border: 1px solid rgba(217, 155, 102, 0.25); }
     .glow-teal { box-shadow: 0 0 15px rgba(45, 212, 191, 0.4); }
     .glow-copper { box-shadow: 0 0 15px rgba(217, 155, 102, 0.4); }
-    .hidden { display: none !important; }
+    .hidden { display: none; }
+    @media (min-width: 1024px) {
+      .lg\:flex { display: flex !important; }
+      .lg\:hidden { display: none !important; }
+      .lg\:block { display: block !important; }
+    }
+    @media (max-width: 1023px) {
+      .lg\:flex { display: none !important; }
+    }
     .flex { display: flex; }
     .flex-col { flex-direction: column; }
     .items-center { align-items: center; }
@@ -80,8 +88,10 @@
   </style>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/src/vendor/maplibre-gl.css">
 <script>
-tailwind.config = {
+window.tailwind = window.tailwind || {};
+window.tailwind.config = {
   theme: {
     extend: {
       colors: {
@@ -365,93 +375,307 @@ tailwind.config = {
     </div>
   </div>
 
-  <!-- S03 LIVE 3D MAP -->
-  <div id="view-map" class="hidden relative h-screen w-full overflow-hidden bg-obsidian">
-    <canvas id="atlas-3d-canvas-full" class="absolute inset-0 w-full h-full block z-0"></canvas>
-
-    <header style="height: 56px; border-bottom: 1px solid #263142;" class="absolute top-0 left-0 right-0 z-20 bg-surfaceDark px-6 flex items-center justify-between">
-      <div class="flex items-center gap-4">
-        <button onclick="switchView('overview')" class="text-copper font-bold text-sm">← Overview</button>
-        <span style="color: #475569;">|</span>
-        <h1 class="text-sm font-bold text-white">Live Map</h1>
-        <span class="text-xs font-mono" style="color: #94A3B8;">• Kariangau Logistics • 20 Vehicles • Simulation Running</span>
-      </div>
-      <button onclick="switchView('landing')" class="text-xs font-mono" style="color: #94A3B8;">▲ ATLAS Home</button>
-    </header>
-
-    <div style="top: 72px; left: 24px;" class="absolute z-20 glass-panel rounded-lg p-3 w-56 text-xs flex flex-col gap-2">
-      <div class="font-bold text-white pb-1 flex justify-between" style="border-bottom: 1px solid #263142;">
-        <span>Layers</span><span>▾</span>
-      </div>
-      <div class="flex flex-col gap-1.5 font-mono">
-        <label class="flex items-center gap-2"><input type="checkbox" checked> <span>☑ Vehicles (20)</span></label>
-        <label class="flex items-center gap-2"><input type="checkbox" checked> <span>☑ Routes</span></label>
-        <label class="flex items-center gap-2"><input type="checkbox" checked> <span>☑ Geofence</span></label>
-        <label class="flex items-center gap-2"><input type="checkbox" checked> <span>☑ Hubs & Depots</span></label>
-        <label class="flex items-center gap-2"><input type="checkbox" checked> <span>☑ Traffic</span></label>
-        <label class="flex items-center gap-2"><input type="checkbox" checked> <span>☑ 3D Buildings</span></label>
-      </div>
-    </div>
-
-    <div style="top: 72px; left: 50%; transform: translateX(-50%);" class="absolute z-20 glass-panel rounded-full px-4 py-1.5 flex items-center gap-3 text-xs font-mono">
-      <button onclick="setCamMode('free')" id="cam-free" style="color: #94A3B8;">Free</button>
-      <button onclick="setCamMode('follow')" id="cam-follow" class="text-tealAccent font-bold px-2 py-0.5 rounded" style="background: rgba(45,212,191,0.1); border: 1px solid rgba(45,212,191,0.3);">Follow</button>
-      <button onclick="setCamMode('chase')" id="cam-chase" style="color: #94A3B8;">Chase</button>
-      <span style="color: #475569;">|</span>
-      <button onclick="resetOrbit()" class="text-copper">🧭</button>
-    </div>
-
-    <div id="truck-callout-map" style="top: 42%; left: 45%;" class="absolute z-20 glass-panel px-3 py-1.5 rounded-lg text-xs font-mono text-tealAccent flex items-center gap-2 glow-teal">
-      <span style="width: 8px; height: 8px;" class="rounded-full bg-tealAccent"></span>
-      <span>TRK-012 · In Transit • 42 km/h · ETA 14:08 • 12.4 km</span>
-    </div>
-
-    <div style="top: 72px; right: 24px;" class="absolute z-20 glass-panel rounded-lg w-80 p-4 flex flex-col gap-4">
-      <div class="flex items-center justify-between pb-2" style="border-bottom: 1px solid #263142;">
-        <div class="flex items-center gap-2">
-          <span class="font-bold text-sm text-white">TRK-012</span>
-          <span style="background: rgba(45,212,191,0.15); color: #2DD4BF; border: 1px solid rgba(45,212,191,0.3);" class="px-2 py-0.5 text-xs font-mono rounded-full">In Transit</span>
+    <!-- S03 LIVE 3D MAP (3D MAP INTERACTION CONTROLS) -->
+  <div id="view-map" class="hidden relative h-screen w-full overflow-hidden bg-[#10141A] flex flex-col lg:flex-row">
+    
+    <!-- DESKTOP WORKSTATION SIDEBAR (WF-01/02/03) -->
+    <aside class="hidden lg:flex flex-col w-[222px] min-w-[222px] h-full bg-[#151B22] border-r border-[#263142] p-4 text-xs font-mono justify-between z-20 select-none">
+      <div class="flex flex-col gap-5">
+        <div class="flex items-center gap-2 pb-3 border-b border-[#39464F]">
+          <span class="text-xl font-bold tracking-wider text-[#F5F1E9]">▲  A T L A S</span>
         </div>
-        <button onclick="document.getElementById('truck-callout-map').classList.toggle('hidden')" style="color: #94A3B8;">✕</button>
+        <nav class="flex flex-col gap-1 text-[#A4B5BC]">
+          <button onclick="switchView('overview')" class="text-left px-3 py-2 rounded hover:text-white hover:bg-[#28333B] transition-colors">Overview</button>
+          <div class="flex items-center bg-[#28333B] text-[#DCA876] font-bold border-l-2 border-[#DCA876] px-3 py-2 rounded-r">
+            <span>Live Map</span>
+          </div>
+          <button class="text-left px-3 py-2 rounded hover:text-white hover:bg-[#28333B] transition-colors">Shipments</button>
+          <button class="text-left px-3 py-2 rounded hover:text-white hover:bg-[#28333B] transition-colors">Dispatch</button>
+          <button class="text-left px-3 py-2 rounded hover:text-white hover:bg-[#28333B] transition-colors">Fleet</button>
+          <button class="text-left px-3 py-2 rounded hover:text-white hover:bg-[#28333B] transition-colors">Trips</button>
+          <button class="text-left px-3 py-2 rounded hover:text-white hover:bg-[#28333B] transition-colors">Analytics</button>
+          <button class="text-left px-3 py-2 rounded hover:text-white hover:bg-[#28333B] transition-colors">Replay</button>
+          <button class="text-left px-3 py-2 rounded hover:text-white hover:bg-[#28333B] transition-colors">Settings</button>
+        </nav>
+      </div>
+      <div class="pt-4 border-t border-[#39464F] flex flex-col gap-0.5">
+        <div class="text-[11px] font-bold text-[#65C9B6]">SIMULATED DATA</div>
+        <div class="text-[11px] text-[#A4B5BC]">Kariangau • WITA</div>
+      </div>
+    </aside>
+
+    <!-- MAIN OPERATOR CONTENT COLUMN -->
+    <main class="flex-1 flex flex-col h-full bg-[#10141A] p-2 sm:p-3 gap-2 sm:gap-3 overflow-hidden relative z-10">
+
+      <!-- DESKTOP TOP HEADER (64px, WF-01) -->
+      <header class="hidden lg:flex h-16 min-h-[64px] bg-[#151B22] border border-[#263142] rounded-[10px] px-6 items-center justify-between z-20">
+        <div>
+          <h1 class="text-xl font-bold text-[#F5F1E9]">Live 3D Fleet Map</h1>
+          <p class="text-xs text-[#A4B5BC]">Kariangau • synthetic fleet • 20 vehicles</p>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="bg-[#234A47] text-[#65C9B6] border border-[#2DD4BF]/30 px-3 py-1 rounded text-xs font-bold font-mono">SIMULATED</span>
+          <button onclick="toggleLanguage()" id="s03-lang-btn-text" class="text-xs font-mono text-[#A4B5BC] hover:text-white">EN / ID ▾</button>
+        </div>
+      </header>
+
+      <!-- MOBILE TOP HEADER (60px, WF-04) -->
+      <header class="flex lg:hidden h-[60px] min-h-[60px] bg-[#151B22] border-b border-[#263142] px-4 items-center justify-between z-20 rounded-t-[10px]">
+        <div class="flex items-center gap-3">
+          <button onclick="switchView('overview')" class="text-xl font-bold text-[#DCA876] hover:opacity-80">←</button>
+          <div>
+            <h1 class="text-base font-bold text-[#F5F1E9]">Live Fleet Map</h1>
+            <p class="text-[11px] text-[#A4B5BC]">Kariangau · 20 synthetic trucks</p>
+          </div>
+        </div>
+        <button onclick="toggleMobileLayers()" class="bg-[#28333B] hover:bg-[#32404A] text-[#F5F1E9] text-xs font-bold font-mono px-3 py-1.5 rounded-lg border border-[#39464F]">Layers</button>
+      </header>
+
+      <!-- DESKTOP TOOLBAR STRIP (51px, WF-01) -->
+      <div class="hidden lg:flex h-[51px] min-h-[51px] bg-[#1C252D] border border-[#39464F] rounded-[10px] px-4 items-center justify-between text-xs font-mono z-20">
+        <div class="flex items-center gap-2">
+          <input type="text" placeholder="Search fleet / route..." class="bg-[#151B22] text-white border border-[#263142] rounded-lg px-3 py-1.5 w-64 text-xs focus:outline-none focus:border-[#DCA876]">
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="toggleDesktopLayers()" class="bg-[#28333B] hover:bg-[#32404A] text-[#F5F1E9] px-3.5 py-1.5 rounded-lg border border-[#39464F] font-bold">Layers</button>
+          <button onclick="resetOrbit()" class="bg-[#28333B] hover:bg-[#32404A] text-[#F5F1E9] px-3.5 py-1.5 rounded-lg border border-[#39464F] font-bold">Fit fleet</button>
+          <button onclick="startGuidedTour()" class="bg-[#28333B] hover:bg-[#32404A] text-[#F5F1E9] px-3.5 py-1.5 rounded-lg border border-[#39464F] font-bold">Demo tour</button>
+          <span class="text-[#65C9B6] font-bold text-[11px] ml-2">SOURCE: SIMULATED</span>
+        </div>
       </div>
 
-      <div class="flex text-xs font-medium" style="border-bottom: 1px solid #263142;">
-        <button class="pb-1.5 px-3 text-copper font-bold" style="border-bottom: 2px solid #D99B66;">Overview</button>
-        <button class="pb-1.5 px-3" style="color: #94A3B8;">Trip</button>
-        <button class="pb-1.5 px-3" style="color: #94A3B8;">Telemetry</button>
+      <!-- MOBILE CAMERA CONTROL BAR (48px, WF-04) -->
+      <div class="flex lg:hidden h-[48px] min-h-[48px] bg-[#151B22] border border-[#39464F] rounded-[10px] px-2 items-center gap-2 text-xs font-mono justify-around z-20">
+        <button onclick="setCamMode('free')" id="mob-cam-free" class="flex-1 py-1.5 rounded-lg bg-[#28333B] text-white font-bold text-center">Map</button>
+        <button onclick="setCamMode('follow')" id="mob-cam-follow" class="flex-1 py-1.5 rounded-lg bg-[#DCA876] text-[#10141A] font-bold text-center">Follow</button>
+        <button onclick="setCamMode('chase')" id="mob-cam-chase" class="flex-1 py-1.5 rounded-lg bg-[#28333B] text-white font-bold text-center">Chase</button>
+        <button onclick="setCamMode('overview')" id="mob-cam-overview" class="flex-1 py-1.5 rounded-lg bg-[#28333B] text-white font-bold text-center">Fit</button>
       </div>
 
-      <div class="flex flex-col gap-2 text-xs font-mono">
-        <div class="flex justify-between"><span style="color: #94A3B8;">Driver:</span><span class="text-white font-semibold">Rizky Pratama</span></div>
-        <div class="flex justify-between"><span style="color: #94A3B8;">Route:</span><span>Kariangau Hub → Balikpapan Depot</span></div>
-        <div class="flex justify-between"><span style="color: #94A3B8;">ETA:</span><span class="text-tealAccent">14:08 WITA (1h 54m)</span></div>
-        <div class="flex justify-between"><span style="color: #94A3B8;">Distance:</span><span>12.4 km</span></div>
-        <div class="flex justify-between"><span style="color: #94A3B8;">Speed:</span><span>42 km/h</span></div>
-        <div class="flex justify-between"><span style="color: #94A3B8;">Load:</span><span>Fuel (12,000 L)</span></div>
+      <!-- DESKTOP LAYERS POPOVER -->
+      <div id="desktop-layers-popover" class="hidden absolute top-[138px] right-36 z-40 bg-[#1C252D] border border-[#39464F] rounded-lg p-3 w-56 text-xs flex flex-col gap-2 font-mono shadow-2xl">
+        <div class="font-bold text-white pb-1 flex justify-between border-b border-[#39464F]">
+          <span>Layers</span>
+          <button onclick="toggleDesktopLayers()" class="text-[#A4B5BC] hover:text-white">✕</button>
+        </div>
+        <div class="flex flex-col gap-1.5 text-slate-300">
+          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked class="accent-[#2DD4BF]"> <span>☑ Vehicles (20)</span></label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked class="accent-[#2DD4BF]"> <span>☑ Corridors</span></label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked class="accent-[#2DD4BF]"> <span>☑ Geofence</span></label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked class="accent-[#2DD4BF]"> <span>☑ Hubs & Depots</span></label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked class="accent-[#2DD4BF]"> <span>☑ Traffic</span></label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked class="accent-[#2DD4BF]"> <span>☑ 3D Buildings</span></label>
+        </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-2 pt-2">
-        <button onclick="setCamMode('follow')" class="py-2 rounded bg-copper text-black font-bold text-xs">Follow Vehicle</button>
-        <button class="py-2 rounded bg-surfaceDark text-xs font-semibold" style="border: 1px solid #263142;">Open Trip →</button>
+      <!-- CENTRAL WORKSPACE ROW: MAP CARD + DOCKED INSPECTOR -->
+      <div class="flex-1 flex gap-2 sm:gap-3 min-h-0 relative z-10">
+
+        <!-- MAP CARD CONTAINER -->
+        <div id="atlas-map-card" class="flex-1 relative rounded-[10px] border border-[#39464F] overflow-hidden bg-[#112A30]">
+          
+          <!-- THREE.JS / MAPLIBRE CANVAS CONTAINER -->
+          <div id="atlas-map-container" class="absolute inset-0 w-full h-full block z-0">
+            <canvas id="atlas-3d-canvas-full" class="absolute inset-0 w-full h-full block z-0"></canvas>
+          </div>
+
+          <!-- TOP-LEFT GEOGRAPHIC / OPTION B PROVENANCE BADGE -->
+          <div id="map-geo-badge" class="absolute top-3 left-3 z-20 bg-[#151B22]/90 border border-[#39464F] px-2.5 py-1 rounded-md text-[10px] font-bold font-mono text-[#65C9B6] pointer-events-none select-none">
+            LIVE GEOGRAPHY • BALIKPAPAN
+          </div>
+
+          <!-- DESKTOP FLOATING CAMERA PILL (TOP-CENTER) -->
+          <div style="top: 12px; left: 50%; transform: translateX(-50%);" class="hidden lg:flex absolute z-20 glass-panel rounded-full px-3 py-1 items-center gap-2 text-xs font-mono shadow-lg">
+            <button onclick="setCamMode('free')" id="cam-free" class="px-2 py-0.5 rounded text-[#A4B5BC] hover:text-white">Operator</button>
+            <button onclick="setCamMode('follow')" id="cam-follow" class="text-tealAccent font-bold px-2 py-0.5 rounded" style="background: rgba(45,212,191,0.1); border: 1px solid rgba(45,212,191,0.3);">Follow</button>
+            <button onclick="setCamMode('chase')" id="cam-chase" class="px-2 py-0.5 rounded text-[#A4B5BC] hover:text-white">Chase</button>
+            <button onclick="setCamMode('overview')" id="cam-overview" class="px-2 py-0.5 rounded text-[#A4B5BC] hover:text-white">Overview</button>
+            <span class="text-[#475569]">|</span>
+            <button onclick="resetOrbit()" class="text-copper hover:opacity-80" title="Reset Camera">🧭</button>
+          </div>
+
+          <!-- OPTION B: SYNCHRONIZED CONTEXT MINI-MAP INSET (BOTTOM-LEFT OF MAP CARD) -->
+          <div id="context-mini-map" style="display: none;" class="absolute bottom-[96px] lg:bottom-7 left-3 z-20 bg-[#151B22]/95 border border-[#39464F] rounded-lg p-2.5 w-44 sm:w-48 shadow-2xl text-xs font-mono flex flex-col gap-1.5 select-none transition-all duration-300">
+            <div class="flex items-center justify-between text-[10px] font-bold text-[#65C9B6]">
+              <span id="mini-map-badge-title">GEO-DERIVED ROUTE DIAGRAM</span>
+              <span id="mini-map-id">TRK-004</span>
+            </div>
+            <div class="relative w-full h-14 bg-[#112A30] rounded border border-[#39464F]/60 overflow-hidden">
+              <svg id="mini-map-svg" viewBox="0 0 160 56" class="w-full h-full">
+                <!-- Highway Route Path (dynamically updated from verified GeoJSON waypoints) -->
+                <path id="mini-map-route-path" d="" fill="none" stroke="#2DD4BF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <!-- Live Vehicle Dot (exact projected WGS84 coordinate) -->
+                <circle id="mini-map-vehicle-dot" cx="80" cy="28" r="4.5" fill="#DCA876" stroke="#FFFFFF" stroke-width="1.5"/>
+              </svg>
+            </div>
+            <div class="flex items-center justify-between text-[9px] text-[#A4B5BC]">
+              <span id="mini-map-route-name" class="truncate">Kariangau Corridor</span>
+              <span class="text-[#65C9B6] font-bold">OSM LIVE SYNC</span>
+            </div>
+          </div>
+
+          <!-- GEOMETRICALLY NON-OCCLUDING SCREEN CALLOUT BADGE -->
+          <div id="truck-callout-map" style="display: none;" class="absolute z-20 bg-[#151B22]/95 border border-[#65C9B6] px-3 py-1.5 rounded-lg text-xs font-mono text-[#65C9B6] flex flex-col items-center gap-0.5 shadow-2xl pointer-events-none select-none">
+            <div class="flex items-center gap-1.5">
+              <span style="width: 8px; height: 8px;" class="rounded-full bg-[#65C9B6]"></span>
+              <span id="callout-line-1" class="font-bold text-[11px] sm:text-[12px]">TRK-004 • IN TRANSIT</span>
+            </div>
+            <span id="callout-line-2" class="text-[9px] sm:text-[10px] text-[#A4B5BC]">47 km/h · simulated · 16m ETA</span>
+          </div>
+
+          <!-- LEGAL GEOSPATIAL ATTRIBUTION BADGE (ALWAYS VISIBLE & NON-OCCLUDED) -->
+          <div class="absolute bottom-2 right-2 z-20 bg-[#151B22]/85 border border-[#263142] px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-mono text-[#6F8790] pointer-events-none select-none max-w-[calc(100%-16px)] truncate">
+            Basemap: Esri World Imagery (Maxar, Earthstar Geographics) | Roads: OpenStreetMap contributors
+          </div>
+        </div>
+
+        <!-- DOCKED VEHICLE INSPECTOR PANEL (DESKTOP ONLY: 328px, WF-01/02/03) -->
+        <aside id="vehicle-inspector-panel" class="hidden lg:flex flex-col w-[328px] min-w-[328px] bg-[#1C252D] border border-[#39464F] rounded-[10px] p-4 text-xs font-mono gap-3 z-20 overflow-y-auto">
+          <div class="flex items-center justify-between pb-2 border-b border-[#39464F]">
+            <div class="flex items-center gap-2">
+              <span id="inspector-truck-id" class="font-bold text-xl text-[#F5F1E9]">TRK-001</span>
+              <span id="inspector-truck-status" class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-[#234A47] text-[#65C9B6] border border-[#2DD4BF]/30">IN TRANSIT</span>
+            </div>
+            <button onclick="setCamMode('free')" class="text-[#A4B5BC] hover:text-white" title="Reset View">✕</button>
+          </div>
+
+          <div class="flex text-xs font-medium border-b border-[#39464F] pb-1 gap-2 text-[#A4B5BC]">
+            <button class="pb-1 text-[#DCA876] font-bold border-b-2 border-[#DCA876]">OVERVIEW</button>
+            <button class="pb-1 hover:text-white">TRIP</button>
+            <button class="pb-1 hover:text-white">TELEMETRY</button>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <div>
+              <span class="text-[10px] font-bold text-[#A4B5BC] block">DRIVER</span>
+              <span id="inspector-truck-driver" class="text-sm font-semibold text-[#F5F1E9]">Rizky Pratama</span>
+            </div>
+            <div>
+              <span class="text-[10px] font-bold text-[#A4B5BC] block">ROUTE</span>
+              <span id="inspector-truck-route" class="text-sm font-semibold text-[#F5F1E9]">MT Haryono → Sepinggan</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <span class="text-[10px] font-bold text-[#A4B5BC] block">SPEED</span>
+                <span id="inspector-truck-speed" class="text-sm font-semibold text-[#F5F1E9]">47 km/h • simulated</span>
+              </div>
+              <div>
+                <span class="text-[10px] font-bold text-[#A4B5BC] block">ETA</span>
+                <span id="inspector-truck-eta" class="text-sm font-semibold text-[#65C9B6]">16 min • virtual</span>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <span class="text-[10px] font-bold text-[#A4B5BC] block">DISTANCE</span>
+                <span id="inspector-truck-dist" class="text-xs text-[#F5F1E9]">11.2 km / 14.4 km</span>
+              </div>
+              <div>
+                <span class="text-[10px] font-bold text-[#A4B5BC] block">CARGO LOAD</span>
+                <span id="inspector-truck-load" class="text-xs text-[#F5F1E9]">ISO Containers — FMCG (20 T)</span>
+              </div>
+            </div>
+            <div>
+              <span class="text-[10px] font-bold text-[#A4B5BC] block">VEHICLE CLASS</span>
+              <span id="inspector-truck-class" class="text-xs" style="color:#2DD4BF;">40ft Container Semi-Trailer</span>
+              <div id="inspector-truck-asset" class="text-[10px] text-amber-400 font-bold hidden">ASSET GATE G1: BLOCKED [PBR Hero Truck Candidate Required]</div>
+            </div>
+            <div>
+              <span class="text-[10px] font-bold text-[#A4B5BC] block">SOURCE</span>
+              <span class="text-xs text-[#A4B5BC]">SIMULATED • seed 77</span>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-2 pt-2 border-t border-[#39464F]">
+            <button onclick="setCamMode('follow')" class="w-full py-2.5 rounded-lg bg-[#DCA876] hover:bg-[#c99464] text-[#10141A] font-bold text-xs transition-colors">Follow selected vehicle</button>
+            <button onclick="setCamMode('chase')" class="w-full py-2 rounded-lg bg-[#28333B] hover:bg-[#32404A] text-[#F5F1E9] text-xs font-semibold border border-[#39464F] transition-colors">Chase view</button>
+            <button onclick="setCamMode('free')" class="w-full py-1.5 rounded-lg text-[#A4B5BC] hover:text-white text-xs transition-colors">Exit follow / Return to Operator</button>
+          </div>
+        </aside>
+      </div>
+
+      <!-- MOBILE BOTTOM SHEET (WF-04 COLLAPSED ~88px / WF-05 EXPANDED ~260px) -->
+      <div id="mobile-bottom-sheet" class="flex lg:hidden flex-col bg-[#1C252D] border border-[#39464F] rounded-t-xl px-4 py-2.5 z-30 transition-all duration-300 ease-in-out h-[88px] select-none shadow-2xl">
+        <div onclick="toggleMobileSheet()" class="w-16 h-1 bg-[#A4B5BC] rounded mx-auto cursor-pointer mb-2"></div>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span id="mob-truck-id" class="font-bold text-sm text-[#F5F1E9]">TRK-001 • In Transit</span>
+            <span id="mob-truck-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold border" style="color:#2DD4BF;border-color:#2DD4BF4D;background:#2DD4BF1A;">40ft Container Semi-Trailer</span>
+          </div>
+          <button onclick="toggleMobileSheet()" id="mob-sheet-chevron" class="text-[#DCA876] text-lg font-bold p-1">⌃</button>
+        </div>
+        <div id="mob-sheet-summary" class="text-xs text-[#A4B5BC] mt-0.5">
+          <span id="mob-truck-speed">47 km/h</span> · <span id="mob-truck-eta">ETA 16 min</span> · simulated
+        </div>
+
+        <!-- EXPANDED CONTENT DETAILS (WF-05) -->
+        <div id="mob-sheet-details" class="hidden flex-col gap-2 pt-2 border-t border-[#39464F] mt-2 font-mono text-xs">
+          <div class="text-[#A4B5BC] text-xs truncate">
+            <span id="mob-sheet-driver">Rizky Pratama</span> • <span id="mob-sheet-route">Kariangau → Sepinggan</span>
+          </div>
+          <div class="flex justify-between items-center text-sm font-bold">
+            <span id="mob-sheet-speed-large" class="text-white">47 km/h</span>
+            <span id="mob-sheet-eta-large" class="text-[#65C9B6]">16 min ETA</span>
+          </div>
+          <div class="text-[11px] text-[#A4B5BC]" id="mob-sheet-tick">SIMULATED • virtual tick 152</div>
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <button onclick="setCamMode('free')" class="py-2 px-3 rounded-lg bg-[#DCA876] text-[#10141A] font-bold text-xs text-center">Exit follow</button>
+            <button onclick="setCamMode('chase')" class="py-2 px-3 rounded-lg bg-[#28333B] text-white font-bold text-xs border border-[#39464F] text-center">Chase view</button>
+          </div>
+          <div onclick="toggleMobileSheet()" class="text-center text-[10px] text-[#A4B5BC] pt-1 cursor-pointer">↓ collapse to reveal map</div>
+        </div>
+      </div>
+
+      <!-- DESKTOP SIMULATION STRIP (69px, WF-01) -->
+      <footer class="hidden lg:flex h-[69px] min-h-[69px] bg-[#151B22] border border-[#39464F] rounded-[10px] px-6 items-center justify-between text-xs font-mono z-20">
+        <div class="flex items-center gap-3">
+          <button id="sim-play-btn" onclick="toggleSimPlay()" class="px-5 py-2 rounded-lg bg-[#DCA876] hover:bg-[#c99464] text-[#10141A] font-bold transition-colors">Pause</button>
+          <button id="sim-step-btn" onclick="stepSim()" class="px-4 py-2 rounded-lg bg-[#28333B] hover:bg-[#32404A] text-[#F5F1E9] font-bold border border-[#39464F] transition-colors">Step</button>
+          <select id="sim-speed" class="bg-[#28333B] text-[#F5F1E9] border border-[#39464F] rounded-lg px-3 py-2 font-bold cursor-pointer">
+            <option value="1">1×</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+          </select>
+          <button id="sim-scenario-btn" onclick="cycleSimScenario()" class="px-4 py-2 rounded-lg bg-[#28333B] hover:bg-[#32404A] text-[#F5F1E9] font-bold border border-[#39464F] transition-colors">Scenario</button>
+          <button id="sim-reset-btn" onclick="resetSim()" class="px-4 py-2 rounded-lg bg-[#28333B] hover:bg-[#32404A] text-[#F5F1E9] font-bold border border-[#39464F] transition-colors">Reset</button>
+        </div>
+        <div>
+          <span id="sim-clock-display" class="font-bold text-[#65C9B6] text-sm tracking-wide">VIRTUAL 08:14:26 WITA  ·  DEMO</span>
+        </div>
+      </footer>
+
+      <!-- MOBILE SIMULATION BAR (48px, WF-04) -->
+      <footer class="flex lg:hidden h-[48px] min-h-[48px] bg-[#151B22] border border-[#39464F] rounded-[10px] px-4 items-center justify-between text-xs font-mono z-20">
+        <div class="flex items-center gap-2">
+          <button id="mob-sim-play-btn" onclick="toggleSimPlay()" class="px-4 py-1.5 rounded-lg bg-[#DCA876] text-[#10141A] font-bold">Pause</button>
+          <button id="mob-sim-speed-btn" onclick="cycleSimSpeed()" class="px-3 py-1.5 rounded-lg bg-[#28333B] text-[#F5F1E9] font-bold border border-[#39464F]">1×</button>
+        </div>
+        <span id="mob-sim-clock-display" class="font-bold text-[#65C9B6]">08:14 WITA</span>
+      </footer>
+
+    </main>
+
+    <!-- MOBILE LAYERS MODAL (WF-04) -->
+    <div id="mobile-layers-modal" class="hidden fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+      <div class="bg-[#1C252D] border border-[#39464F] rounded-xl p-5 w-full max-w-sm flex flex-col gap-4 font-mono text-xs shadow-2xl">
+        <div class="flex items-center justify-between border-b border-[#39464F] pb-2">
+          <span class="text-sm font-bold text-white">Map Layers</span>
+          <button onclick="closeMobileLayers()" class="text-[#A4B5BC] text-lg font-bold">✕</button>
+        </div>
+        <div class="flex flex-col gap-3 text-sm text-slate-200">
+          <label class="flex items-center gap-2"><input type="checkbox" checked class="accent-[#2DD4BF] w-4 h-4"> <span>Vehicles (20)</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" checked class="accent-[#2DD4BF] w-4 h-4"> <span>Corridors</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" checked class="accent-[#2DD4BF] w-4 h-4"> <span>Geofence</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" checked class="accent-[#2DD4BF] w-4 h-4"> <span>Hubs & Depots</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" checked class="accent-[#2DD4BF] w-4 h-4"> <span>Traffic</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" checked class="accent-[#2DD4BF] w-4 h-4"> <span>3D Buildings</span></label>
+        </div>
+        <button onclick="closeMobileLayers()" class="w-full py-2 bg-[#DCA876] text-[#10141A] font-bold rounded-lg mt-2">Apply & Close</button>
       </div>
     </div>
 
-    <div style="bottom: 24px; left: 50%; transform: translateX(-50%); width: 88%; max-width: 800px;" class="absolute z-20 glass-panel rounded-xl px-6 py-3 flex items-center gap-4 text-xs font-mono">
-      <button id="sim-play-btn" onclick="toggleSimPlay()" style="width: 32px; height: 32px;" class="rounded-full bg-copper text-black font-bold flex items-center justify-center">⏸</button>
-      <select id="sim-speed" class="bg-surfaceDark text-white px-2 py-1 rounded" style="border: 1px solid #263142;">
-        <option>1x ▾</option>
-        <option>2x</option>
-        <option>5x</option>
-      </select>
-      <div style="flex: 1;" class="flex items-center">
-        <input type="range" min="0" max="100" value="35" style="width: 100%; accent-color: #2DD4BF;">
-      </div>
-      <div class="text-white font-semibold">Sim Time: 08:14:26 WITA</div>
-      <button onclick="resetSim()" class="px-2.5 py-1 rounded bg-surfaceDark" style="border: 1px solid #263142;">↺ Reset</button>
-    </div>
   </div>
 
-  <!-- GUIDED TOUR MODAL -->
+<!-- GUIDED TOUR MODAL -->
   <div id="guided-tour-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(0,0,0,0.75);">
     <div style="width: 100%; max-width: 420px;" class="glass-panel rounded-2xl p-6 flex flex-col gap-4 relative">
       <button onclick="closeTour()" style="top: 16px; right: 16px; color: #94A3B8;" class="absolute">✕</button>
@@ -472,6 +696,74 @@ tailwind.config = {
     let tourStep = 0;
     let simPlaying = true;
 
+    
+    window.isMobileSheetExpanded = false;
+    function toggleMobileSheet() {
+      window.isMobileSheetExpanded = !window.isMobileSheetExpanded;
+      const isExpanded = window.isMobileSheetExpanded;
+      const sheet = document.getElementById('mobile-bottom-sheet');
+      const chevron = document.getElementById('mob-sheet-chevron');
+      const details = document.getElementById('mob-sheet-details');
+      const summary = document.getElementById('mob-sheet-summary');
+      const miniMap = document.getElementById('context-mini-map');
+      if (isExpanded) {
+        if (sheet) { sheet.style.height = '260px'; sheet.classList.remove('h-[88px]'); sheet.classList.add('h-[260px]'); }
+        if (chevron) chevron.innerText = '⌄';
+        if (details) details.classList.remove('hidden');
+        if (summary) summary.classList.add('hidden');
+        if (miniMap) { miniMap.classList.add('opacity-0', 'pointer-events-none'); }
+      } else {
+        if (sheet) { sheet.style.height = '88px'; sheet.classList.remove('h-[260px]'); sheet.classList.add('h-[88px]'); }
+        if (chevron) chevron.innerText = '⌃';
+        if (details) details.classList.add('hidden');
+        if (summary) summary.classList.remove('hidden');
+        if (miniMap) { miniMap.classList.remove('opacity-0', 'pointer-events-none'); }
+      }
+    }
+    function toggleMobileLayers() {
+      const modal = document.getElementById('mobile-layers-modal');
+      if (modal) modal.classList.toggle('hidden');
+    }
+    function closeMobileLayers() {
+      const modal = document.getElementById('mobile-layers-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+    function toggleDesktopLayers() {
+      const popover = document.getElementById('desktop-layers-popover');
+      if (popover) popover.classList.toggle('hidden');
+    }
+    function stepSim() {
+      if (window.ATLAS_V21?.sim) {
+        window.ATLAS_V21.sim.step();
+        if (window.syncPrimarySimUI) window.syncPrimarySimUI(window.ATLAS_V21.sim.getSnapshot());
+      }
+    }
+    function cycleSimSpeed() {
+      if (window.ATLAS_V21?.sim) {
+        const snap = window.ATLAS_V21.sim.getSnapshot();
+        const speeds = [1, 2, 4];
+        const nextSpeed = speeds[(speeds.indexOf(snap.speedMultiplier) + 1) % speeds.length];
+        if (typeof window.changePrimarySimSpeed === 'function') {
+          window.changePrimarySimSpeed(nextSpeed);
+        } else {
+          window.ATLAS_V21.sim.setSpeed(nextSpeed);
+        }
+        const btn = document.getElementById('sim-speed-btn');
+        if (btn) btn.innerText = nextSpeed + '×';
+        const mobBtn = document.getElementById('mob-sim-speed-btn');
+        if (mobBtn) mobBtn.innerText = nextSpeed + '×';
+      }
+    }
+    function cycleSimScenario() {
+      if (window.ATLAS_V21?.sim) {
+        const snap = window.ATLAS_V21.sim.getSnapshot();
+        const scenarios = ['NORMAL_DELIVERY', 'TRAFFIC_DELAY', 'VEHICLE_STOP'];
+        const nextScenario = scenarios[(scenarios.indexOf(snap.scenario) + 1) % scenarios.length];
+        window.ATLAS_V21.sim.setScenario(nextScenario);
+        if (window.atlasLegacyNotice) window.atlasLegacyNotice('Scenario: ' + nextScenario);
+      }
+    }
+
     function switchView(v) {
       currentView = v;
       document.getElementById('view-landing').classList.add('hidden');
@@ -485,7 +777,7 @@ tailwind.config = {
 
     function toggleLanguage() {
       currentLang = (currentLang === 'EN') ? 'ID' : 'EN';
-      document.getElementById('lang-btn-text').innerText = currentLang + ' ▾';
+      const el1 = document.getElementById('lang-btn-text'); if (el1) el1.innerText = currentLang + ' ▾'; const el2 = document.getElementById('s03-lang-btn-text'); if (el2) el2.innerText = currentLang + ' ▾';
     }
 
     var tourSteps = [
@@ -581,153 +873,17 @@ tailwind.config = {
       window.__atlasCanvasLoops.sync();
     });
 
-    // Pure HTML5 Canvas 3D Isometric Renderer
+    window.atlasCanvasMayRun = atlasCanvasMayRun;
+
+    // Initial lifecycle bridge for 3D canvases.
+    // Preserves WebGL context initialization for the Three.js 3D subsystem.
     function init3DCanvas(canvasId) {
       var canvas = document.getElementById(canvasId);
       if (!canvas) return;
-      var ctx = canvas.getContext('2d');
-      var t = 0;
       var scheduledFrame = null;
 
       function render() {
         scheduledFrame = null;
-        var w = canvas.width = canvas.clientWidth || 800;
-        var h = canvas.height = canvas.clientHeight || 500;
-        ctx.clearRect(0, 0, w, h);
-
-        // Background Dusk/Night Gradient
-        var grad = ctx.createLinearGradient(0, 0, 0, h);
-        grad.addColorStop(0, '#0B0F14');
-        grad.addColorStop(1, '#102030');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, w, h);
-
-        var cx = w / 2;
-        var cy = h / 2 + 30;
-
-        // Oscillating Orbit / Pan Camera angle
-        var orbit = Math.sin(t * 0.02) * 0.15;
-
-        // Helper Isometric Projection
-        function project(x, y, z) {
-          var rx = x * Math.cos(orbit) - z * Math.sin(orbit);
-          var rz = x * Math.sin(orbit) + z * Math.cos(orbit);
-          var isoX = cx + (rx - rz) * 2.2;
-          var isoY = cy + (rx + rz) * 1.1 - y * 2.2;
-          return { x: isoX, y: isoY };
-        }
-
-        // Draw Ground Grid / Water
-        ctx.strokeStyle = '#1E293B';
-        ctx.lineWidth = 1;
-        for (var g = -100; g <= 100; g += 20) {
-          var p1 = project(-100, 0, g);
-          var p2 = project(100, 0, g);
-          ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
-          var p3 = project(g, 0, -100);
-          var p4 = project(g, 0, 100);
-          ctx.beginPath(); ctx.moveTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y); ctx.stroke();
-        }
-
-        // Glowing Teal Highway / Toll Road
-        ctx.strokeStyle = '#2DD4BF';
-        ctx.lineWidth = 12;
-        ctx.shadowColor = '#2DD4BF';
-        ctx.shadowBlur = 10;
-        var rStart = project(-120, 0, -10);
-        var rEnd = project(120, 0, -10);
-        ctx.beginPath(); ctx.moveTo(rStart.x, rStart.y); ctx.lineTo(rEnd.x, rEnd.y); ctx.stroke();
-        ctx.shadowBlur = 0;
-
-        // Red Dashed Geofence Polygon (Kariangau Port Zone)
-        ctx.strokeStyle = '#EF4444';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6, 4]);
-        var g1 = project(-60, 0, -60);
-        var g2 = project(80, 0, -60);
-        var g3 = project(80, 0, 60);
-        var g4 = project(-60, 0, 60);
-        ctx.beginPath();
-        ctx.moveTo(g1.x, g1.y); ctx.lineTo(g2.x, g2.y); ctx.lineTo(g3.x, g3.y); ctx.lineTo(g4.x, g4.y);
-        ctx.closePath(); ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Warehouses (Extruded 3D)
-        function drawBox(x, y, z, dx, dy, dz, color) {
-          var p1 = project(x, y, z);
-          var p2 = project(x + dx, y, z);
-          var p3 = project(x + dx, y, z + dz);
-          var p4 = project(x, y, z + dz);
-
-          var pt1 = project(x, y + dy, z);
-          var pt2 = project(x + dx, y + dy, z);
-          var pt3 = project(x + dx, y + dy, z + dz);
-          var pt4 = project(x, y + dy, z + dz);
-
-          ctx.fillStyle = color;
-          ctx.beginPath();
-          ctx.moveTo(pt1.x, pt1.y); ctx.lineTo(pt2.x, pt2.y); ctx.lineTo(pt3.x, pt3.y); ctx.lineTo(pt4.x, pt4.y);
-          ctx.closePath(); ctx.fill();
-
-          ctx.fillStyle = 'rgba(0,0,0,0.3)';
-          ctx.beginPath();
-          ctx.moveTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.lineTo(pt3.x, pt3.y); ctx.lineTo(pt2.x, pt2.y);
-          ctx.closePath(); ctx.fill();
-        }
-
-        drawBox(-80, 0, -40, 30, 20, 40, '#1E293B');
-
-        // Fuel Tanks (White/Silver Cylinders at Bottom Left)
-        for (var fk = 0; fk < 3; fk++) {
-          var fx = -70 + fk * 25;
-          var fz = 30;
-          var fp = project(fx, 0, fz);
-          ctx.fillStyle = '#E2E8F0';
-          ctx.beginPath();
-          ctx.ellipse(fp.x, fp.y - 15, 16, 8, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillRect(fp.x - 16, fp.y - 15, 32, 20);
-        }
-
-        // Gantry Cranes (Copper #D99B66)
-        for (var cr = 0; cr < 3; cr++) {
-          var cxPos = 30 + cr * 25;
-          var czPos = -40;
-          var cp = project(cxPos, 0, czPos);
-          ctx.strokeStyle = '#D99B66';
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.moveTo(cp.x - 12, cp.y); ctx.lineTo(cp.x - 6, cp.y - 45);
-          ctx.moveTo(cp.x + 12, cp.y); ctx.lineTo(cp.x + 6, cp.y - 45);
-          ctx.lineTo(cp.x - 20, cp.y - 45); ctx.lineTo(cp.x + 20, cp.y - 45);
-          ctx.stroke();
-        }
-
-        // Container Stacks
-        var cColors = ['#D99B66', '#2DD4BF', '#334155', '#38BDF8'];
-        for (var cx = 0; cx < 3; cx++) {
-          for (var cz = 0; cz < 4; cz++) {
-            var cColor = cColors[(cx + cz) % cColors.length];
-            drawBox(20 + cx * 12, 0, 0 + cz * 12, 10, 8, 10, cColor);
-          }
-        }
-
-        // Moving 3D Truck TRK-012 with Headlights
-        if (simPlaying) t += 1;
-        var truckPos = ((t * 2) % 240) - 120;
-        var tp = project(truckPos, 0, -10);
-
-        // Truck Cabin & Body
-        drawBox(truckPos, 0, -12, 12, 8, 6, '#2DD4BF');
-        drawBox(truckPos + 10, 0, -12, 4, 9, 6, '#D99B66');
-
-        // Headlights glow
-        ctx.fillStyle = '#FFFFFF';
-        ctx.shadowColor = '#FFFFFF';
-        ctx.shadowBlur = 12;
-        ctx.beginPath(); ctx.arc(tp.x + 15, tp.y - 6, 3, 0, Math.PI * 2); ctx.fill();
-        ctx.shadowBlur = 0;
-
         if (atlasCanvasMayRun(canvasId)) scheduledFrame = requestAnimationFrame(render);
       }
 
@@ -755,8 +911,10 @@ tailwind.config = {
     init3DCanvas('atlas-3d-canvas');
     init3DCanvas('atlas-3d-canvas-mini');
     init3DCanvas('atlas-3d-canvas-full');
+    window.__atlasCanvasControllers = atlasCanvasControllers;
     window.__atlasCanvasLoops.sync();
   </script>
+  <script type="module" src="/src/3d/bootstrap.js"></script>
 
 <section id="atlas-legacy-workspace" class="bg-obsidian min-h-screen flex flex-col justify-between text-slate-200 hidden" hidden aria-label="Legacy operations prototype">
 
@@ -1329,10 +1487,17 @@ function atlasLegacyNotice(message) {
   if (!node) {
     node = document.createElement('div'); node.id = 'atlas-legacy-notice';
     node.setAttribute('role','status'); node.setAttribute('aria-live','polite');
-    node.className = 'fixed bottom-4 right-4 z-50 bg-[#10141A] border border-[#DCA876] text-[#F5F1E9] p-3 rounded text-xs shadow-xl max-w-sm';
+    node.className = 'fixed top-16 right-4 sm:top-auto sm:bottom-4 z-50 bg-[#10141A]/95 border border-[#DCA876] text-[#F5F1E9] p-3 rounded-lg text-xs shadow-2xl max-w-sm backdrop-blur transition-opacity duration-300';
     document.body.appendChild(node);
   }
   node.textContent = message;
+  node.style.opacity = '1';
+  node.style.display = 'block';
+  clearTimeout(node._hideTimer);
+  node._hideTimer = setTimeout(() => {
+    node.style.opacity = '0';
+    setTimeout(() => { if (node.style.opacity === '0') node.style.display = 'none'; }, 300);
+  }, 4000);
 }
 
 // Virtual Clock

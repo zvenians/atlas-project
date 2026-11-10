@@ -1,7 +1,7 @@
-# ATLAS Stage B P0 Stabilization — Preview Only
+# ATLAS Stage B P0 Stabilization — Implementation Notes
 
-Base: main at 8d16b052f2c5abf634bccd2a85868508d4f95958
-Branch: fix/atlas-p0-stabilization
+Historical base: main at 8d16b052f2c5abf634bccd2a85868508d4f95958
+Original implementation branch: fix/atlas-p0-stabilization
 
 The existing S01 Landing, S02 Overview and S03 Live Map layouts have not been redesigned. Source fixes are intentionally limited to structural HTML, honest control disclosures, CSV parser hardening, Canvas animation lifecycle gating, and simulation bridge integration.
 
