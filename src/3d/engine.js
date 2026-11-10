@@ -8,28 +8,34 @@ import { HUBS, assignVehicleRoutes, interpolateRoute, routesToGeoJSON, hubsToGeo
 
 /**
  * FLEET_DATA payload definitions for driver cards and telemetry.
+ * Loads are aligned to VEHICLE_TYPES by index % 5:
+ *   0 = container  → ISO intermodal container cargo
+ *   1 = box        → boxed/palletized dry cargo
+ *   2 = reefer     → temperature-controlled cargo
+ *   3 = tanker     → liquid/bulk liquid cargo
+ *   4 = cargo      → heavy/oversized/flatbed cargo
  */
 const FLEET_DATA = [
-  { driver: 'Rizky Pratama', load: 'Fuel (12,000 L)' },
-  { driver: 'Budi Santoso', load: 'Heavy Mining Machinery (14 T)' },
-  { driver: 'Agus Setiawan', load: 'Reefer Seafood (-18°C)' },
-  { driver: 'Dewi Lestari', load: 'Containerized Electronics (8 T)' },
-  { driver: 'Hendra Wijaya', load: 'Dry Bulk Construction (16 T)' },
-  { driver: 'Siti Rahma', load: 'Reefer Pharmaceuticals (+4°C)' },
-  { driver: 'Fajar Nugraha', load: 'Refined Petroleum (15,000 L)' },
-  { driver: 'Eko Prasetyo', load: 'Containerized FMCG (11 T)' },
-  { driver: 'Dimas Anggara', load: 'Industrial Chemicals (9 T)' },
-  { driver: 'Tri Wahyuni', load: 'Reefer Dairy Products (+2°C)' },
-  { driver: 'Ahmad Fauzi', load: 'Heavy Equipment Parts (13 T)' },
-  { driver: 'Wawan Kurniawan', load: 'Agricultural Commodities (10 T)' },
-  { driver: 'Indra Permana', load: 'Container Steel Coils (18 T)' },
-  { driver: 'Bambang Supriyanto', load: 'Industrial Lubricants (11,000 L)' },
-  { driver: 'Rian Hidayat', load: 'Reefer Frozen Poultry (-20°C)' },
-  { driver: 'Yusuf Maulana', load: 'Consumer Goods Pallets (7 T)' },
-  { driver: 'Dedi Irawan', load: 'Mining Consumables (12 T)' },
-  { driver: 'Bayu Saputra', load: 'Timber & Plywood (15 T)' },
-  { driver: 'Taufik Hidayat', load: 'Port Marine Hardware (8.5 T)' },
-  { driver: 'Aris Munandar', load: 'Express Package Freight (5 T)' },
+  { driver: 'Rizky Pratama',      load: 'ISO Containers — FMCG (20 T)' },           // idx 0 → container
+  { driver: 'Budi Santoso',       load: 'Palletized Electronics (12 T)' },           // idx 1 → box
+  { driver: 'Agus Setiawan',      load: 'Reefer Seafood (-18°C, 8 T)' },            // idx 2 → reefer
+  { driver: 'Dewi Lestari',       load: 'Fuel Oil (14,000 L)' },                    // idx 3 → tanker
+  { driver: 'Hendra Wijaya',      load: 'Steel Coils — Flatbed (18 T)' },           // idx 4 → cargo/flatbed
+  { driver: 'Siti Rahma',         load: 'ISO Containers — Textiles (16 T)' },       // idx 5 → container
+  { driver: 'Fajar Nugraha',      load: 'Boxed Construction Materials (11 T)' },    // idx 6 → box
+  { driver: 'Eko Prasetyo',       load: 'Reefer Pharmaceuticals (+4°C, 6 T)' },     // idx 7 → reefer
+  { driver: 'Dimas Anggara',      load: 'Refined Petroleum (15,000 L)' },           // idx 8 → tanker
+  { driver: 'Tri Wahyuni',        load: 'Heavy Mining Machinery (22 T)' },          // idx 9 → cargo/flatbed
+  { driver: 'Ahmad Fauzi',        load: 'ISO Containers — Consumer Goods (14 T)' },// idx 10 → container
+  { driver: 'Wawan Kurniawan',    load: 'Palletized Agricultural Goods (9 T)' },    // idx 11 → box
+  { driver: 'Indra Permana',      load: 'Reefer Dairy Products (+2°C, 7 T)' },      // idx 12 → reefer
+  { driver: 'Bambang Supriyanto', load: 'Industrial Chemicals (12,000 L)' },        // idx 13 → tanker
+  { driver: 'Rian Hidayat',       load: 'Port Crane Components (19 T)' },           // idx 14 → cargo/flatbed
+  { driver: 'Yusuf Maulana',      load: 'ISO Containers — Export Pallets (13 T)' },// idx 15 → container
+  { driver: 'Dedi Irawan',        load: 'Boxed Mining Consumables (10 T)' },        // idx 16 → box
+  { driver: 'Bayu Saputra',       load: 'Reefer Frozen Poultry (-20°C, 9 T)' },    // idx 17 → reefer
+  { driver: 'Taufik Hidayat',     load: 'Marine Lubricants (11,000 L)' },           // idx 18 → tanker
+  { driver: 'Aris Munandar',      load: 'Timber & Plywood — Lowboy (15 T)' },      // idx 19 → cargo/flatbed
 ];
 
 /**
@@ -918,7 +924,17 @@ _updateCalloutPosition(index = this.selectedVehicle) {
 
     const etaMinutes = Math.round((Number(remainingKm) / Math.max(speedKmh, 20)) * 60);
     const etaStr = `${etaMinutes}m remaining (${remainingKm} km)`;
-    const truckType = VEHICLE_TYPES[index % VEHICLE_TYPES.length]?.label || 'Commercial Hauler';
+    const vehicleSpec = VEHICLE_TYPES[index % VEHICLE_TYPES.length];
+    const truckType = vehicleSpec?.label || 'Commercial Hauler';
+    // Type-aware badge colour for mobile sheet
+    const typeColourMap = {
+      container: '#2DD4BF', // teal
+      box:       '#38BDF8', // sky blue
+      reefer:    '#818CF8', // indigo
+      tanker:    '#F59E0B', // amber
+      cargo:     '#D99B66', // earth gold
+    };
+    const typeColor = typeColourMap[vehicleSpec?.type] || '#2DD4BF';
 
     // Update Floating Screen Callout (pinned cleanly above vehicle bounding box without overlap)
     const callout = document.getElementById('truck-callout-map');
@@ -973,6 +989,14 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     if (mobEtaLg) mobEtaLg.textContent = `${etaMinutes} min ETA`;
     const mobTick = document.getElementById('mob-sheet-tick');
     if (mobTick) mobTick.textContent = `SIMULATED • virtual tick ${snap.tick}`;
+    // Update mobile vehicle-type badge colour to match vehicle class
+    const mobBadge = document.getElementById('mob-truck-badge');
+    if (mobBadge) {
+      mobBadge.textContent = truckType;
+      mobBadge.style.color = typeColor;
+      mobBadge.style.borderColor = `${typeColor}4D`;
+      mobBadge.style.background = `${typeColor}1A`;
+    }
 
     // Synchronize Virtual Simulation Clock Displays
     const virtualMin = 14 + Math.floor((snap.tick || 0) / 60);
@@ -1006,7 +1030,10 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     const elLoad = document.getElementById('inspector-truck-load');
     if (elLoad) elLoad.textContent = fleetInfo.load;
     const elClass = document.getElementById('inspector-truck-class');
-    if (elClass) elClass.textContent = truckType;
+    if (elClass) {
+      elClass.textContent = truckType;
+      elClass.style.color = typeColor;
+    }
   }
 
   // --- PUBLIC API IMPLEMENTATION ---

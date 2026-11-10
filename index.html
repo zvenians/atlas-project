@@ -533,7 +533,7 @@ window.tailwind.config = {
         <aside id="vehicle-inspector-panel" class="hidden lg:flex flex-col w-[328px] min-w-[328px] bg-[#1C252D] border border-[#39464F] rounded-[10px] p-4 text-xs font-mono gap-3 z-20 overflow-y-auto">
           <div class="flex items-center justify-between pb-2 border-b border-[#39464F]">
             <div class="flex items-center gap-2">
-              <span id="inspector-truck-id" class="font-bold text-xl text-[#F5F1E9]">TRK-004</span>
+              <span id="inspector-truck-id" class="font-bold text-xl text-[#F5F1E9]">TRK-001</span>
               <span id="inspector-truck-status" class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-[#234A47] text-[#65C9B6] border border-[#2DD4BF]/30">IN TRANSIT</span>
             </div>
             <button onclick="setCamMode('free')" class="text-[#A4B5BC] hover:text-white" title="Reset View">✕</button>
@@ -548,7 +548,7 @@ window.tailwind.config = {
           <div class="flex flex-col gap-2">
             <div>
               <span class="text-[10px] font-bold text-[#A4B5BC] block">DRIVER</span>
-              <span id="inspector-truck-driver" class="text-sm font-semibold text-[#F5F1E9]">Dewi Lestari</span>
+              <span id="inspector-truck-driver" class="text-sm font-semibold text-[#F5F1E9]">Rizky Pratama</span>
             </div>
             <div>
               <span class="text-[10px] font-bold text-[#A4B5BC] block">ROUTE</span>
@@ -571,13 +571,13 @@ window.tailwind.config = {
               </div>
               <div>
                 <span class="text-[10px] font-bold text-[#A4B5BC] block">CARGO LOAD</span>
-                <span id="inspector-truck-load" class="text-xs text-[#F5F1E9]">Chemicals (14,000 L)</span>
+                <span id="inspector-truck-load" class="text-xs text-[#F5F1E9]">ISO Containers — FMCG (20 T)</span>
               </div>
             </div>
             <div>
               <span class="text-[10px] font-bold text-[#A4B5BC] block">VEHICLE CLASS</span>
-              <span id="inspector-truck-class" class="text-xs text-slate-300">Hazmat Fuel / Chemical Tanker</span>
-              <div id="inspector-truck-asset" class="text-[10px] text-amber-400 font-bold hidden">ASSET GATE: BLOCKED [Placeholder active - Verified 3D GLB candidate required]</div>
+              <span id="inspector-truck-class" class="text-xs" style="color:#2DD4BF;">40ft Container Semi-Trailer</span>
+              <div id="inspector-truck-asset" class="text-[10px] text-amber-400 font-bold hidden">ASSET GATE G1: BLOCKED [PBR Hero Truck Candidate Required]</div>
             </div>
             <div>
               <span class="text-[10px] font-bold text-[#A4B5BC] block">SOURCE</span>
@@ -598,8 +598,8 @@ window.tailwind.config = {
         <div onclick="toggleMobileSheet()" class="w-16 h-1 bg-[#A4B5BC] rounded mx-auto cursor-pointer mb-2"></div>
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <span id="mob-truck-id" class="font-bold text-sm text-[#F5F1E9]">TRK-004 • In transit</span>
-            <span id="mob-truck-badge" class="px-2 py-0.2 rounded-full text-[10px] font-bold bg-[#234A47] text-[#65C9B6]">SIMULATED</span>
+            <span id="mob-truck-id" class="font-bold text-sm text-[#F5F1E9]">TRK-001 • In Transit</span>
+            <span id="mob-truck-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold border" style="color:#2DD4BF;border-color:#2DD4BF4D;background:#2DD4BF1A;">40ft Container Semi-Trailer</span>
           </div>
           <button onclick="toggleMobileSheet()" id="mob-sheet-chevron" class="text-[#DCA876] text-lg font-bold p-1">⌃</button>
         </div>
@@ -610,7 +610,7 @@ window.tailwind.config = {
         <!-- EXPANDED CONTENT DETAILS (WF-05) -->
         <div id="mob-sheet-details" class="hidden flex-col gap-2 pt-2 border-t border-[#39464F] mt-2 font-mono text-xs">
           <div class="text-[#A4B5BC] text-xs truncate">
-            <span id="mob-sheet-driver">Dewi Lestari</span> • <span id="mob-sheet-route">MT Haryono → Sepinggan</span>
+            <span id="mob-sheet-driver">Rizky Pratama</span> • <span id="mob-sheet-route">Kariangau → Sepinggan</span>
           </div>
           <div class="flex justify-between items-center text-sm font-bold">
             <span id="mob-sheet-speed-large" class="text-white">47 km/h</span>
