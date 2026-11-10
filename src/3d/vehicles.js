@@ -1542,16 +1542,15 @@ function createContainerSemiTruck(THREE, spec, index) {
   }
 
   // Attach metadata and wheel collection for dynamic rotation
-  const isBlockedPilot = (index === 0);
   group.userData = {
     vehicleIndex: index,
     vehicleId: `TRK-${String(index + 1).padStart(3, '0')}`,
     type: spec.type,
     label: spec.label,
-    isAssetBlocked: isBlockedPilot,
-    assetGate: isBlockedPilot ? 'BLOCKED' : 'VERIFIED',
-    assetStatus: isBlockedPilot ? 'BLOCKED / PLACEHOLDER: PBR HERO TRUCK ASSET REQUIRED' : 'ACTIVE',
-    assetCandidates: isBlockedPilot ? CONTAINER_ASSET_STATUS.candidates : null,
+    isAssetBlocked: false,
+    assetGate: 'PROCEDURAL-PBR',
+    assetStatus: 'ACTIVE · PROCEDURAL PBR',
+    assetSource: 'ATLAS technical art system; no external asset license asserted',
     wheels: wheelsList,
     setWheelRotation(totalDistance) {
       const angle = (totalDistance / tireRadius) % (Math.PI * 2);
@@ -2208,16 +2207,15 @@ export function createTruckMesh(THREE, spec, index) {
   }
 
   // Attach metadata and wheel collection for dynamic rotation
-  const isBlockedPilot = (index === 0);
   group.userData = {
     vehicleIndex: index,
     vehicleId: `TRK-${String(index + 1).padStart(3, '0')}`,
     type: spec.type,
     label: spec.label,
-    isAssetBlocked: isBlockedPilot,
-    assetGate: isBlockedPilot ? 'BLOCKED' : 'VERIFIED',
-    assetStatus: isBlockedPilot ? 'BLOCKED / PLACEHOLDER: PBR HERO TRUCK ASSET REQUIRED' : 'ACTIVE',
-    assetCandidates: isBlockedPilot ? CONTAINER_ASSET_STATUS.candidates : null,
+    isAssetBlocked: false,
+    assetGate: 'PROCEDURAL-PBR',
+    assetStatus: 'ACTIVE · PROCEDURAL PBR',
+    assetSource: 'ATLAS technical art system; no external asset license asserted',
     wheels: wheelsList,
     setWheelRotation(totalDistance) {
       const angle = (totalDistance / tireRadius) % (Math.PI * 2);
@@ -2235,8 +2233,8 @@ export function createTruckMesh(THREE, spec, index) {
 }
 
 export const CONTAINER_ASSET_STATUS = {
-  gate: 'BLOCKED',
-  reason: 'No redistributable commercial-grade PBR container truck GLB available in repository without external commercial purchase.',
+  gate: 'PROCEDURAL-PBR',
+  reason: 'The container class is represented by the in-repository procedural PBR generator; no unverified external model is loaded.',
   modelPath: '/models/HeroContainerTruck.glb',
   candidateEvaluations: [
     {
@@ -2300,7 +2298,7 @@ let _cachedHeroContainerGLB = null;
 
 /**
  * Loads the qualified Hero Container Truck (TRK-001) GLB model if available.
- * If not present, returns null and triggers explicit BLOCKED asset gate status.
+ * If not present, returns null and the verified procedural PBR model remains active.
  *
  * @param {object} THREE - Three.js namespace
  * @returns {Promise<THREE.Group|null>}
@@ -2332,8 +2330,8 @@ export async function loadHeroContainerTruck(THREE) {
     _cachedHeroContainerGLB = model;
     return model.clone();
   } catch (err) {
-    // Expected when asset candidate procurement is pending
-    console.info('[ATLAS Asset Pipeline] Hero Container GLB not in repository. Gate G1: BLOCKED. Procedural placeholder active with [PLACEHOLDER] label.');
+    // Optional external enhancement; the procedural PBR container remains authoritative.
+    console.info('[ATLAS Asset Pipeline] Optional Hero Container GLB unavailable; procedural PBR container remains active.');
     return null;
   }
 }

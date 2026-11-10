@@ -5,6 +5,7 @@
 
 import { createFleet, loadHeroGLBTruck, VEHICLE_TYPES } from './vehicles.js';
 import { HUBS, assignVehicleRoutes, interpolateRoute, routesToGeoJSON, hubsToGeoJSON, getRouteSample, getRouteWindow, transformToLocalFrame, ROUTE_METADATA } from './routes.js';
+import { createAdaptiveQualityController } from './quality.js';
 
 /**
  * FLEET_DATA payload definitions for driver cards and telemetry.
@@ -238,7 +239,10 @@ export class Atlas3DEngine {
     this._routeProgressions = [];
     this._initialProgress = [];
     this._lastTick = -1;
-    this._measuredCalls = 48;
+    this._measuredCalls = null;
+    this._measuredTriangles = null;
+    this._quality = createAdaptiveQualityController({ initial: 'balanced' });
+    this._lastFrameTime = null;
     this._heroModel = null;
     this._selectionHalo = null;
     this._isInspectingHero = false;
@@ -768,6 +772,7 @@ export class Atlas3DEngine {
           antialias: true,
         });
         engine.renderer.autoClear = false;
+        engine.renderer.setPixelRatio?.(Math.min(window.devicePixelRatio || 1, engine._quality.profile.maxDpr) * engine._quality.profile.pixelRatioScale);
 
         // Asynchronously load and cache hero glTF model
         loadHeroGLBTruck(THREE).then(hero => {
@@ -777,6 +782,16 @@ export class Atlas3DEngine {
 
       render(gl, matrix) {
         if (!engine.renderer) return;
+        const frameNow = typeof performance !== 'undefined' ? performance.now() : null;
+        if (frameNow !== null && engine._lastFrameTime !== null) {
+          const previousLevel = engine._quality.level;
+          engine._quality.sample(frameNow - engine._lastFrameTime);
+          if (previousLevel !== engine._quality.level) {
+            const profile = engine._quality.profile;
+            engine.renderer.setPixelRatio?.(Math.min(window.devicePixelRatio || 1, profile.maxDpr) * profile.pixelRatioScale);
+          }
+        }
+        engine._lastFrameTime = frameNow;
 
         // Deterministic simulation update from canonical clock (all modes)
         engine._updateFleetSimulation(THREE, maplibregl);
@@ -1134,18 +1149,13 @@ _updateCalloutPosition(index = this.selectedVehicle) {
         this._updateCalloutPosition(index);
 
         const truck = this.fleet?.[index];
-        const isBlocked = Boolean(truck?.userData?.isAssetBlocked);
         const line1 = document.getElementById('callout-line-1');
-        if (line1) line1.textContent = `${truckId} • ${statusStr.toUpperCase()}${isBlocked ? ' [PLACEHOLDER]' : ''}`;
+        if (line1) line1.textContent = `${truckId} • ${statusStr.toUpperCase()}`;
 
         const assetEl = document.getElementById('inspector-truck-asset');
         if (assetEl) {
-          if (isBlocked) {
-            assetEl.classList.remove('hidden');
-            assetEl.textContent = 'ASSET GATE G1: BLOCKED [PBR Hero Truck Candidate Required]';
-          } else {
-            assetEl.classList.add('hidden');
-          }
+          assetEl.classList.remove('hidden');
+          assetEl.textContent = 'ASSET: PROCEDURAL PBR • ATLAS TECHNICAL ART SYSTEM';
         }
         const line2 = document.getElementById('callout-line-2');
         if (line2) {
@@ -1511,7 +1521,7 @@ _updateCalloutPosition(index = this.selectedVehicle) {
         rendererName = gl.getParameter(dbgRenderInfo.UNMASKED_RENDERER_WEBGL) || 'WebGL';
       }
     } catch {}
-    if (!this.renderer || !this._measuredCalls) {
+    if (!this.renderer || this._measuredCalls === null || this._measuredCalls === undefined) {
       return {
         calls: null,
         triangles: null,

@@ -5,6 +5,6 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "check": "node --check src/core/simulation.js && node --check src/core/shipments.js && node --check src/legacy-integration.js && node --check src/3d/vehicles.js && node --check src/3d/routes.js && node --check src/3d/scenes.js && node --check src/3d/map3d.js && node --check src/3d/bootstrap.js && node --check tests/core.test.js && node --check tests/static.test.js && node --check tests/3d.test.js"
+    "check": "node --check src/core/simulation.js && node --check src/core/shipments.js && node --check src/legacy-integration.js && node --check src/3d/vehicles.js && node --check src/3d/routes.js && node --check src/3d/scenes.js && node --check src/3d/map3d.js && node --check src/3d/bootstrap.js && node --check src/3d/quality.js && node --check tests/core.test.js && node --check tests/static.test.js && node --check tests/3d.test.js && node --check tests/quality.test.js"
   }
 }

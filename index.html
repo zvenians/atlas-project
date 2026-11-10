@@ -411,7 +411,7 @@ window.tailwind.config = {
       <header class="hidden lg:flex h-16 min-h-[64px] bg-[#151B22] border border-[#263142] rounded-[10px] px-6 items-center justify-between z-20">
         <div>
           <h1 class="text-xl font-bold text-[#F5F1E9]">Live 3D Fleet Map</h1>
-          <p class="text-xs text-[#A4B5BC]">Kariangau • synthetic fleet • 20 vehicles</p>
+          <p class="text-xs text-[#A4B5BC]">Kariangau • route-derived fleet • 20 vehicles</p>
         </div>
         <div class="flex items-center gap-4">
           <span class="bg-[#234A47] text-[#65C9B6] border border-[#2DD4BF]/30 px-3 py-1 rounded text-xs font-bold font-mono">SIMULATED</span>
@@ -425,7 +425,7 @@ window.tailwind.config = {
           <button onclick="switchView('overview')" class="text-xl font-bold text-[#DCA876] hover:opacity-80">←</button>
           <div>
             <h1 class="text-base font-bold text-[#F5F1E9]">Live Fleet Map</h1>
-            <p class="text-[11px] text-[#A4B5BC]">Kariangau · 20 synthetic trucks</p>
+            <p class="text-[11px] text-[#A4B5BC]">Kariangau · 20 route-derived trucks</p>
           </div>
         </div>
         <button onclick="toggleMobileLayers()" class="bg-[#28333B] hover:bg-[#32404A] text-[#F5F1E9] text-xs font-bold font-mono px-3 py-1.5 rounded-lg border border-[#39464F]">Layers</button>
@@ -1465,12 +1465,13 @@ window.tailwind.config = {
   <div class="bg-surface border border-borderDark rounded-lg p-5 max-w-md w-full space-y-4">
     <h3 class="font-bold text-white text-base">Bulk CSV Import (FR-027)</h3>
     <div class="border-2 border-dashed border-borderDark rounded-lg p-6 text-center bg-obsidian text-xs text-slate-400">
-      <p>Drag & Drop CSV Manifest file here, or click to browse</p>
+      <label for="csv-manifest-file" class="cursor-pointer underline underline-offset-2 text-slate-200">Choose a CSV manifest</label>
+      <input id="csv-manifest-file" type="file" accept=".csv,text/csv" class="sr-only">
       <p class="text-[10px] text-copper mt-1">Expected format: ID, Origin, Destination, Weight, ETA</p>
     </div>
     <div class="flex justify-end gap-2">
       <button onclick="closeModal('modal-csv-import')" class="bg-slate-700 text-xs px-3 py-2 rounded text-white">Cancel</button>
-      <button onclick="processCsvImport()" class="bg-teal text-obsidian font-bold text-xs px-3 py-2 rounded">Import 50 Records</button>
+      <button onclick="processCsvImport()" class="bg-teal text-obsidian font-bold text-xs px-3 py-2 rounded">Import CSV</button>
     </div>
   </div>
 </div>
@@ -1582,7 +1583,7 @@ function stepSim() {
   atlasLegacyNotice('Local simulation tick ' + sim.step().tick);
 }
 function changeScenario(val) {
-  try { window.ATLAS_V21.sim.setScenario(val); atlasLegacyNotice('Synthetic preset: ' + val); }
+  try { window.ATLAS_V21.sim.setScenario(val); atlasLegacyNotice('Local scenario: ' + val); }
   catch (e) { atlasLegacyNotice('Scenario not changed: ' + e.message); }
 }
 function changeRole(val) {
@@ -1612,7 +1613,19 @@ function saveNewShipment(){
     atlasLegacyNotice(item.id + ' created in browser-local prototype only.');
   } catch(e) { atlasLegacyNotice('Shipment not created: ' + e.message); }
 }
-function processCsvImport() { atlasLegacyNotice("CSV upload is not connected. No records imported."); }
+async function processCsvImport() {
+  const input = document.getElementById('csv-manifest-file');
+  const file = input?.files?.[0];
+  if (!file) return atlasLegacyNotice('Choose a CSV manifest first.');
+  try {
+    const csv = await file.text();
+    const imported = window.ATLAS_V21.importCsv(csv);
+    closeModal('modal-csv-import');
+    atlasLegacyNotice(`Imported ${imported.length} shipment${imported.length === 1 ? '' : 's'} locally.`);
+  } catch (error) {
+    atlasLegacyNotice('CSV not imported: ' + error.message);
+  }
+}
 function markReady() { atlasLegacyNotice("Legacy sample shipment is not in local state. No status changed."); }
 
 // Dispatch actions
