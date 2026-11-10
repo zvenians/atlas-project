@@ -33,6 +33,14 @@ try {
     try {
       await page.goto('http://'+'127.0.0.1:'+port+'/',{waitUntil:'domcontentloaded'});
       await page.waitForFunction(()=>Boolean(window.ATLAS_V21?.sim && window.__atlasCanvasLoops),{timeout:15000});
+      // Programmatic view switching can pass even when a fixed overlay blocks clicks.
+      for (const selector of ['#view-overview', '#view-map', '#guided-tour-modal', '#mobile-layers-modal', '#modal-new-shipment', '#modal-csv-import']) {
+        assert.equal(await page.locator(selector).isVisible(), false, selector + ' must be hidden on entry');
+      }
+      await page.getByRole('button', { name: /Launch Demo/ }).first().click();
+      assert.equal(await page.locator('#view-overview').isVisible(), true, 'Launch Demo responds to a real click');
+      assert.equal(await page.locator('#view-landing').isVisible(), false, 'landing is hidden after navigation');
+      await page.evaluate(()=>window.switchView('landing'));
       assert.equal(await page.locator('#atlas-legacy-workspace').isVisible(),false,'legacy hidden at root');
       await page.waitForFunction(()=>window.__atlasCanvasLoops.getActiveLoopCount()===1);
       assert.deepEqual(await page.evaluate(()=>window.__atlasCanvasLoops.getStats().active),['atlas-3d-canvas'],

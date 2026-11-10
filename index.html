@@ -84,6 +84,11 @@
     .z-20 { z-index: 20; }
     .z-30 { z-index: 30; }
     .z-50 { z-index: 50; }
+    /* Hidden state overrides flex utilities without breaking responsive lg:flex/lg:block. */
+    .hidden:not(.lg\:flex):not(.lg\:block) { display: none !important; }
+    @media (max-width: 1023px) {
+      .hidden.lg\:flex, .hidden.lg\:block { display: none !important; }
+    }
     button { cursor: pointer; border: none; background: none; color: inherit; }
   </style>
 <script src="https://cdn.tailwindcss.com"></script>
