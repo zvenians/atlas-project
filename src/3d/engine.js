@@ -1461,11 +1461,11 @@ _updateCalloutPosition(index = this.selectedVehicle) {
         }
       } catch {}
     }
-    const contactShadowGeo = new THREE.PlaneGeometry(3.6, 15);
+    const contactShadowGeo = new THREE.PlaneGeometry(3.6, 16.5);
     const contactShadowMat = new THREE.MeshBasicMaterial({
       map: shadowTex,
       transparent: true,
-      opacity: 0.75,
+      opacity: 0.82,
       depthWrite: false
     });
     this._trackingContactShadow = new THREE.Mesh(contactShadowGeo, contactShadowMat);
@@ -1646,90 +1646,104 @@ _updateCalloutPosition(index = this.selectedVehicle) {
       this._trackingPolePool.push(poleGroup);
     }
 
-    // Object pool for Scenery: High-Bay Warehouses, Intermodal Yard Stacks, and Roadside Greenery (16 pre-allocated groups)
-    // Red stick cranes are completely eliminated from the highway tracking scene.
+    // Object pool for Scenery: Realistic Tropical Highway Landscape & Infrastructure (16 pre-allocated groups)
+    // Red stick cranes and fake roadside warehouses are eliminated in favor of real highway corridor features.
     this._trackingSceneryPool = [];
-    const whGeo = new THREE.BoxGeometry(24, 10, 36);
-    const roofPitchedGeo = new THREE.ConeGeometry(24 * 0.72, 3.2, 4);
-    roofPitchedGeo.rotateY(Math.PI / 4);
-    roofPitchedGeo.scale(1, 1, 36 / 24);
 
-    const warehousePlinthGeo = new THREE.BoxGeometry(25, 1.2, 37);
-    const warehousePlinthMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.9 });
-    const warehouseWallMat = new THREE.MeshStandardMaterial({ color: 0x94A3B8, roughness: 0.65, metalness: 0.35 });
-    const warehouseRoofMat = new THREE.MeshStandardMaterial({ color: 0x1E293B, roughness: 0.75, metalness: 0.25 });
-    const loadingDoorMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.7 });
-
-    const foliageMat = new THREE.MeshStandardMaterial({ color: 0x1E3A20, roughness: 0.95 });
-    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4A3728, roughness: 0.9 });
+    const foliageMat = new THREE.MeshStandardMaterial({ color: 0x1E3A20, roughness: 0.92 });
+    const palmFrondMat = new THREE.MeshStandardMaterial({ color: 0x22542A, roughness: 0.88 });
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4A3728, roughness: 0.95 });
+    const gantrySteelMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8, roughness: 0.3 });
+    const signGreenMat = new THREE.MeshStandardMaterial({ color: 0x065F46, roughness: 0.4 });
+    const signWhiteMat = new THREE.MeshBasicMaterial({ color: 0xF8FAFC });
+    const postMat = new THREE.MeshStandardMaterial({ color: 0xE2E8F0, roughness: 0.5 });
 
     for (let sc = 0; sc < 16; sc++) {
       const scGroup = new THREE.Group();
-      if (sc % 3 === 0) {
-        // High-Bay Industrial Logistics Warehouse
-        const plinth = new THREE.Mesh(warehousePlinthGeo, warehousePlinthMat);
-        plinth.position.y = 0.6;
-        scGroup.add(plinth);
+      if (sc % 4 === 0) {
+        // Overhead Highway Directional Gantry Sign ("Tol Balikpapan-Samarinda / Kariangau Exit")
+        const colGeo = new THREE.CylinderGeometry(0.18, 0.18, 7.5, 8);
+        const colL = new THREE.Mesh(colGeo, gantrySteelMat);
+        colL.position.set(-8.5, 3.75, 0);
+        scGroup.add(colL);
 
-        const whBody = new THREE.Mesh(whGeo, warehouseWallMat);
-        whBody.position.y = 6.2;
-        scGroup.add(whBody);
+        const colR = new THREE.Mesh(colGeo, gantrySteelMat);
+        colR.position.set(8.5, 3.75, 0);
+        scGroup.add(colR);
 
-        const roof = new THREE.Mesh(roofPitchedGeo, warehouseRoofMat);
-        roof.position.y = 12.8;
-        scGroup.add(roof);
+        const beamGeo = new THREE.BoxGeometry(17.6, 0.45, 0.45);
+        const beam = new THREE.Mesh(beamGeo, gantrySteelMat);
+        beam.position.set(0, 7.4, 0);
+        scGroup.add(beam);
 
-        // 3 Sectional Loading Dock Doors with dock bumpers
-        for (let d = -1; d <= 1; d++) {
-          const dockDoor = new THREE.Mesh(new THREE.BoxGeometry(4.2, 4.6, 0.1), loadingDoorMat);
-          dockDoor.position.set(d * 6.5, 3.5, 18.05);
-          scGroup.add(dockDoor);
-        }
-      } else if (sc % 3 === 1) {
-        // Multi-tier Intermodal Container Yard Stacks on concrete pad
-        const pad = new THREE.Mesh(new THREE.BoxGeometry(10, 0.2, 16), warehousePlinthMat);
-        pad.position.y = 0.1;
-        scGroup.add(pad);
+        // Green Highway Exit Guide Signboards
+        const signGeo = new THREE.BoxGeometry(6.5, 2.2, 0.12);
+        const sign = new THREE.Mesh(signGeo, signGreenMat);
+        sign.position.set(-2.5, 6.2, 0);
+        scGroup.add(sign);
 
-        const contColors = [0x3B82F6, 0x006837, 0xEA580C, 0xF1F5F9, 0x1E293B];
-        for (let row = 0; row < 2; row++) {
-          for (let tier = 0; tier < 3; tier++) {
-            const cMat = new THREE.MeshStandardMaterial({
-              color: contColors[(sc + row * 2 + tier) % contColors.length],
-              roughness: 0.45,
-              metalness: 0.3
-            });
-            const contMesh = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.6, 12.2), cMat);
-            contMesh.position.set(row * 3.2 - 1.6, 1.4 + tier * 2.6, 0);
-            scGroup.add(contMesh);
+        const signBorder = new THREE.Mesh(new THREE.BoxGeometry(6.6, 2.3, 0.08), signWhiteMat);
+        signBorder.position.set(-2.5, 6.2, 0);
+        scGroup.add(signBorder);
+      } else if (sc % 4 === 1) {
+        // Tropical Indonesian Roadside Palm Cluster (3 oil palms with curved trunks)
+        for (let p = 0; p < 3; p++) {
+          const palm = new THREE.Group();
+          const pTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 7.5, 8), trunkMat);
+          pTrunk.position.y = 3.75;
+          palm.add(pTrunk);
+
+          for (let f = 0; f < 8; f++) {
+            const frondGeo = new THREE.ConeGeometry(0.8, 4.2, 4);
+            frondGeo.rotateX(Math.PI / 3);
+            const frond = new THREE.Mesh(frondGeo, palmFrondMat);
+            frond.rotation.y = (f * Math.PI) / 4;
+            frond.position.y = 7.4;
+            palm.add(frond);
           }
+          palm.position.set((p - 1) * 5.5, 0, (p % 2 ? 3 : -3));
+          scGroup.add(palm);
+        }
+      } else if (sc % 4 === 2) {
+        // Broad Canopy Acacia Mangium & Albizia Rain Trees (Lush roadside greenery)
+        for (let t = 0; t < 2; t++) {
+          const tree = new THREE.Group();
+          const tTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.5, 4.5, 8), trunkMat);
+          tTrunk.position.y = 2.25;
+          tree.add(tTrunk);
+
+          const canopyGeo1 = new THREE.SphereGeometry(3.6, 8, 6);
+          canopyGeo1.scale(1.2, 0.6, 1.2);
+          const c1 = new THREE.Mesh(canopyGeo1, foliageMat);
+          c1.position.y = 5.2;
+          tree.add(c1);
+
+          const canopyGeo2 = new THREE.SphereGeometry(2.6, 8, 6);
+          canopyGeo2.scale(1.1, 0.5, 1.1);
+          const c2 = new THREE.Mesh(canopyGeo2, foliageMat);
+          c2.position.y = 6.8;
+          tree.add(c2);
+
+          tree.position.set((t === 0 ? -4 : 4), 0, (t === 0 ? 2 : -2));
+          scGroup.add(tree);
         }
       } else {
-        // Roadside Logistics Buffer with Tropical Trees & Supply Storage
-        const depotAnnex = new THREE.Mesh(new THREE.BoxGeometry(14, 5, 20), warehouseWallMat);
-        depotAnnex.position.set(0, 2.5, 0);
-        scGroup.add(depotAnnex);
+        // Highway Kilometer Post Marker & Roadside Embankment Brush
+        const kmPostGeo = new THREE.BoxGeometry(0.35, 0.85, 0.25);
+        const kmPost = new THREE.Mesh(kmPostGeo, postMat);
+        kmPost.position.set(0, 0.42, 0);
+        scGroup.add(kmPost);
 
-        // Cylindrical industrial fuel / fluid storage tank
-        const tankGeo = new THREE.CylinderGeometry(4, 4, 7, 16);
-        const tankMesh = new THREE.Mesh(tankGeo, warehousePlinthMat);
-        tankMesh.position.set(12, 3.5, 0);
-        scGroup.add(tankMesh);
+        const kmCap = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.2, 4), signGreenMat);
+        kmCap.position.set(0, 0.95, 0);
+        kmCap.rotation.y = Math.PI / 4;
+        scGroup.add(kmCap);
 
-        // Cluster of 3 tropical roadside perimeter trees
-        for (let t = 0; t < 3; t++) {
-          const treeGroup = new THREE.Group();
-          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 4, 6), trunkMat);
-          trunk.position.y = 2;
-          treeGroup.add(trunk);
-
-          const canopy = new THREE.Mesh(new THREE.SphereGeometry(2.2 + t * 0.3, 8, 6), foliageMat);
-          canopy.position.y = 5.2;
-          canopy.scale.set(1, 1.3, 1);
-          treeGroup.add(canopy);
-
-          treeGroup.position.set(-10 + t * 4, 0, (t - 1) * 8);
-          scGroup.add(treeGroup);
+        for (let s = 0; s < 3; s++) {
+          const shrub = new THREE.Mesh(new THREE.SphereGeometry(1.2 + s * 0.3, 6, 5), foliageMat);
+          shrub.scale.set(1.4, 0.6, 1.2);
+          shrub.position.set(-3 + s * 3, 0.6, -1 + s * 1.5);
+          scGroup.add(shrub);
         }
       }
 
@@ -1866,25 +1880,13 @@ _updateCalloutPosition(index = this.selectedVehicle) {
       this._trackingPolePool[lp].visible = false;
     }
 
-    // 8. Context-Aware Grounded Scenery from Pre-Allocated Pool
-    // Port Cranes & Container Stacks on maritime corridors; Warehouses on freight corridors
-    const fromName = vr?.from?.toLowerCase?.() || '';
-    const toName = vr?.to?.toLowerCase?.() || '';
-    const isPortCorridor = fromName.includes('kariangau') || fromName.includes('semayang') || fromName.includes('kampung_baru') ||
-                           toName.includes('kariangau') || toName.includes('semayang') || toName.includes('kampung_baru');
-
+    // 8. Roadside Highway Infrastructure & Natural Tropical Corridor
     let scIdx = 0;
     for (let i = 2; i < numSamples; i += 16) {
       if (scIdx < this._trackingSceneryPool.length) {
         const s = samples[i];
-        const side = (i % 32 === 2) ? -34 : 34;
-        // Prioritize pool item based on corridor context
-        let poolIndex = scIdx;
-        if (!isPortCorridor && poolIndex % 3 !== 0) {
-          // Freight corridor: select warehouse variants (indices with mod 3 == 0)
-          poolIndex = (scIdx * 3) % this._trackingSceneryPool.length;
-        }
-        const scGroup = this._trackingSceneryPool[poolIndex];
+        const side = (i % 32 === 2) ? -18 : 18;
+        const scGroup = this._trackingSceneryPool[scIdx];
         if (scGroup) {
           scGroup.position.set(s.x + s.nx * side, 0, s.z + s.nz * side);
           scGroup.visible = true;
@@ -1967,20 +1969,20 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     if (this.cameraMode === 'follow') {
       // Heroic front three-quarter view showing cab styling, wheels, container, road & daylight sky
       if (isMobile) {
-        this._trackingCamera.position.set(16, 9.5, 20);
-        this._trackingCamera.lookAt(0, 1.0, 3);
+        this._trackingCamera.position.set(18, 9.5, 22);
+        this._trackingCamera.lookAt(0, 1.2, 2.0);
       } else {
-        this._trackingCamera.position.set(22, 11, 26);
-        this._trackingCamera.lookAt(0, 1.8, 4);
+        this._trackingCamera.position.set(24, 11, 28);
+        this._trackingCamera.lookAt(0, 1.8, 2.5);
       }
     } else if (this.cameraMode === 'chase') {
       // Behind-and-above dynamic road angle showcasing container rear doors, dual wheels, and curved highway
       const lookAhead = windowData.samples.find(s => s.sLocal >= 22) || { x: 0, z: 20 };
       if (isMobile) {
-        this._trackingCamera.position.set(0, 5.0, -17.0);
+        this._trackingCamera.position.set(0, 5.0, -18.5);
         this._trackingCamera.lookAt(lookAhead.x * 0.5, 1.8, Math.max(14, lookAhead.z));
       } else {
-        this._trackingCamera.position.set(0, 5.8, -19.5);
+        this._trackingCamera.position.set(0, 5.6, -21.0);
         this._trackingCamera.lookAt(lookAhead.x * 0.5, 2.0, Math.max(16, lookAhead.z));
       }
     }
@@ -1997,7 +1999,7 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     // Update Top-left badge to Option B provenance
     const geoBadge = document.getElementById('map-geo-badge');
     if (geoBadge) {
-      geoBadge.textContent = 'LIVE GEOGRAPHY • BALIKPAPAN | ROUTE-DERIVED 3D VIEW (SIMULATED SCENIC ASSETS)';
+      geoBadge.textContent = 'LIVE GEOGRAPHY • BALIKPAPAN | ROUTE-DERIVED 3D VIEW (GEO-SAMPLED CORRIDOR)';
     }
 
     // Synchronize underlying MapLibre camera without causing digital zoom blur

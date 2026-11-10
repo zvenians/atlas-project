@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync, copyFileSync, existsSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import crypto from 'node:crypto';
 
@@ -389,7 +389,7 @@ try {
   assert.ok(bboxDesktopFollow.calloutRect.bottom <= bboxDesktopFollow.bbox.minY + 5, 'Callout badge must be positioned cleanly above vehicle bounding box');
   assert.ok(bboxDesktopFollow.bbox.maxX < bboxDesktopFollow.inspectorRect.left, 'Vehicle must not be occluded by docked inspector panel');
   report.assertions.push(`Desktop Follow vehicle projected bbox verified (${bboxDesktopFollow.bbox.width}x${bboxDesktopFollow.bbox.height}px >= 180x70px, zero occlusion)`);
-  await captureProof(mapPage, '21-S03-desktop-follow-trk004.png', '21. S03 Desktop Follow Mode — TRK-001 Hero Heavy Container Semi-Trailer');
+  await captureProof(mapPage, '21-S03-desktop-follow-trk001.png', '21. S03 Desktop Follow Mode — TRK-001 Hero Heavy Container Semi-Trailer');
 
   // 22. S03 Desktop Chase TRK-001 (Behind-Vehicle Dynamic Road Perspective)
   await mapPage.evaluate(async () => {
@@ -399,7 +399,7 @@ try {
   const bboxDesktopChase = await mapPage.evaluate(() => window.__atlas3DEngine.getScreenBoundingBox(0));
   assert.ok(bboxDesktopChase.width >= 180, `Desktop Chase truck bbox width must be >= 180px, got ${bboxDesktopChase.width}px`);
   report.assertions.push(`Desktop Chase vehicle projected bbox verified (${bboxDesktopChase.width}x${bboxDesktopChase.height}px >= 180px)`);
-  await captureProof(mapPage, '22-S03-desktop-chase-trk004.png', '22. S03 Desktop Chase Mode — TRK-001 Rear Dynamic Road Angle');
+  await captureProof(mapPage, '22-S03-desktop-chase-trk001.png', '22. S03 Desktop Chase Mode — TRK-001 Rear Dynamic Road Angle');
 
   // Gate G1 Asset Authenticity & Conspicuous Placeholder Verification
   const gateG1Check = await mapPage.evaluate(async () => {
@@ -587,14 +587,14 @@ try {
   await mobS03.waitForTimeout(400);
 
   // 28. S03 Mobile Follow TRK-001
-  await captureProof(mobS03, '26-S03-mobile-follow-trk004.png', '26. S03 Mobile Follow Mode — TRK-001 Hero Heavy Container Semi-Trailer');
+  await captureProof(mobS03, '26-S03-mobile-follow-trk001.png', '26. S03 Mobile Follow Mode — TRK-001 Hero Heavy Container Semi-Trailer');
 
   // 29. S03 Mobile Chase TRK-001
   await mobS03.evaluate(async () => await window.setCamMode('chase'));
   await mobS03.waitForTimeout(600);
   const mobChaseCheck = await mobS03.evaluate(() => window.__atlas3DEngine.getScreenBoundingBox(0));
   assert.ok(mobChaseCheck.width >= 100, `Mobile Chase truck bbox width must be >= 100px, got ${mobChaseCheck.width}px`);
-  await captureProof(mobS03, '27-S03-mobile-chase-trk004.png', '27. S03 Mobile Chase Mode — TRK-001 Rear Road Perspective');
+  await captureProof(mobS03, '27-S03-mobile-chase-trk001.png', '27. S03 Mobile Chase Mode — TRK-001 Rear Road Perspective');
   report.assertions.push('Mobile Chase mode verified (>= 100px width)');
 
   // 30. Mobile Layers Modal Toggle Verification
@@ -977,6 +977,41 @@ try {
   console.error('ATLAS 3D QA SUITE FAILED:', err);
   process.exitCode = 1;
 } finally {
+  // Archive key Before and After evidence directly into CI archive outDir
+  try {
+    mkdirSync(`${outDir}/after`, { recursive: true });
+    mkdirSync(`${outDir}/before`, { recursive: true });
+
+    const keyCopies = [
+      ['21-S03-desktop-follow-trk001.png', '01-after-desktop-follow.png'],
+      ['22-S03-desktop-chase-trk001.png', '02-after-desktop-chase.png'],
+      ['26-S03-mobile-follow-trk001.png', '03-after-mobile-follow.png'],
+      ['27-S03-mobile-chase-trk001.png', '04-after-mobile-chase.png'],
+      ['29-S03-motion-frame-1.png', '05-after-motion-frame-1.png'],
+      ['30-S03-motion-frame-2.png', '06-after-motion-frame-2.png'],
+      ['31-S03-motion-frame-3.png', '07-after-motion-frame-3.png']
+    ];
+
+    for (const [src, dst] of keyCopies) {
+      const srcPath = `${outDir}/${src}`;
+      if (existsSync(srcPath)) {
+        copyFileSync(srcPath, `${outDir}/${dst}`);
+        copyFileSync(srcPath, `${outDir}/after/${dst}`);
+      }
+    }
+
+    // Copy to brain artifacts directory if running in Antigravity environment
+    const brainDir = 'C:/Users/ACCOUNTING/.gemini/antigravity/brain/af8e15a6-00e8-4e15-99c6-27c820725405';
+    if (existsSync(brainDir)) {
+      for (const [, dst] of keyCopies) {
+        const p = `${outDir}/${dst}`;
+        if (existsSync(p)) copyFileSync(p, `${brainDir}/${dst}`);
+      }
+    }
+  } catch (archiveErr) {
+    console.warn('Evidence archiving warning:', archiveErr.message);
+  }
+
   writeFileSync(`${outDir}/report.json`, JSON.stringify(report, null, 2), 'utf8');
   if (browser) await browser.close();
   server.close();
