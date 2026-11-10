@@ -401,7 +401,7 @@ try {
   report.assertions.push(`Desktop Chase vehicle projected bbox verified (${bboxDesktopChase.width}x${bboxDesktopChase.height}px >= 180px)`);
   await captureProof(mapPage, '22-S03-desktop-chase-trk001.png', '22. S03 Desktop Chase Mode — TRK-001 Rear Dynamic Road Angle');
 
-  // Gate G1 Asset Authenticity & Conspicuous Placeholder Verification
+  // Gate G1 Asset Authenticity — distinguish the in-repository procedural fallback from a licensed external GLB.
   const gateG1Check = await mapPage.evaluate(async () => {
     const modelInfo = window.__atlas3DGetModelInfo?.(0);
     const callout = document.getElementById('truck-callout-map')?.innerText;
@@ -419,13 +419,17 @@ try {
       heroGlbExists
     };
   });
-  assert.equal(gateG1Check.heroGlbExists, false, 'Candidate /models/HeroContainerTruck.glb not yet procured');
-  assert.equal(gateG1Check.modelInfo.isAssetBlocked, true, 'TRK-001 modelInfo must reflect isAssetBlocked: true');
-  assert.equal(gateG1Check.modelInfo.assetGate, 'BLOCKED', 'TRK-001 assetGate must be BLOCKED');
-  assert.ok(gateG1Check.modelInfo.assetCandidates?.length >= 3, 'Must have at least 3 verifiable commercial candidates');
-  assert.ok(gateG1Check.callout?.includes('[PLACEHOLDER]'), 'Callout badge must conspicuously show [PLACEHOLDER]');
-  assert.equal(gateG1Check.assetVisible, true, 'Inspector asset status must be visible for blocked candidate');
-  report.assertions.push('Gate G1: Asset Authenticity evaluated — Status BLOCKED (3 verifiable commercial candidates documented, placeholder conspicuously labeled)');
+  assert.equal(gateG1Check.heroGlbExists, false, 'Unlicensed/unavailable external hero GLB must not be claimed as installed');
+  assert.ok(gateG1Check.modelInfo, 'TRK-001 runtime model metadata must exist');
+  assert.equal(gateG1Check.modelInfo.isGLTF, false, 'TRK-001 must not be reported as an external glTF model');
+  assert.equal(gateG1Check.modelInfo.hasGLB, false, 'TRK-001 must not claim a GLB when only procedural geometry is present');
+  assert.equal(gateG1Check.modelInfo.isAssetBlocked, false, 'The active procedural fallback must remain operable');
+  assert.equal(gateG1Check.modelInfo.assetGate, 'PROCEDURAL-PBR', 'The fallback must be identified as procedural PBR, not a verified commercial GLB');
+  assert.ok(gateG1Check.modelInfo.meshCount > 0, 'The procedural vehicle must contain actual rendered meshes');
+  assert.ok(gateG1Check.callout?.includes('TRK-001'), 'The selected vehicle callout must remain visible');
+  assert.equal(gateG1Check.assetVisible, true, 'The inspector must disclose the active asset type');
+  assert.ok(gateG1Check.assetText?.includes('PROCEDURAL PBR'), 'The inspector must disclose that the active model is procedural');
+  report.assertions.push('Gate G1: No external hero GLB installed; functional procedural PBR fallback is accurately disclosed in runtime metadata and inspector');
 
   // 23. Dynamic Vehicle Selection Switch: TRK-001 -> TRK-004 -> TRK-001
   await mapPage.evaluate(() => window.selectMapVehicle(3));
