@@ -25,7 +25,7 @@ const notice = document.createElement('div');
 notice.setAttribute('role', 'status');
 notice.setAttribute('aria-live', 'polite');
 notice.className = 'fixed bottom-4 right-4 z-50 bg-[#10141A] border border-[#65C9B6] text-[#65C9B6] p-3 rounded-lg text-xs font-mono shadow-xl';
-notice.textContent = 'v2.1 demo engine ready - 3D Tactical Viewport active.';
+notice.textContent = 'Local simulated tactical prototype ready (not verified 3D GIS).';
 document.body.appendChild(notice);
 
 function notify(message) { notice.textContent = message; }
@@ -39,12 +39,13 @@ let cameraState = {
 };
 
 function applyCameraTransform() {
-  const mapSvg = document.querySelector('svg');
+  const mapSvg = $('#svg-map');
   if (!mapSvg) return;
-  const container = mapSvg.parentElement || mapSvg;
+  // Transform the SVG *inside* the clipping map box, never the box itself.
+  const container = mapSvg;
   container.style.transformOrigin = 'center center';
   container.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
-  
+
   if (cameraState.is3D) {
     container.style.transform = `perspective(${cameraState.perspective}px) rotateX(${cameraState.pitch}deg) rotateZ(${cameraState.orbit}deg) scale(${cameraState.zoom})`;
   } else {
@@ -53,15 +54,15 @@ function applyCameraTransform() {
 }
 
 function initCameraToolbar() {
-  const mapSvg = document.querySelector('svg');
+  const mapSvg = $('#svg-map');
   if (!mapSvg) return;
   const mapContainer = mapSvg.parentElement;
-  if (!mapContainer || $('atlas-3d-camera-bar')) return;
+  if (!mapContainer || $('#atlas-3d-camera-bar')) return;
 
   const bar = document.createElement('div');
   bar.id = 'atlas-3d-camera-bar';
   bar.className = 'flex flex-wrap items-center justify-between gap-2 p-2 mb-3 bg-[#10141A] border border-[#262F3D] rounded-lg text-xs font-mono text-[#DCA876] shadow-md z-20';
-  
+
   bar.innerHTML = `
     <div class="flex items-center gap-2">
       <span class="text-[#65C9B6] font-bold tracking-wider">[3D TACTICAL VIEWPORT]</span>
@@ -69,13 +70,13 @@ function initCameraToolbar() {
         ${cameraState.is3D ? '3D Pitch (48°)' : '2D Ortho (0°)'}
       </button>
     </div>
-    <div class="flex items-center gap-1">
+    <div class="flex flex-wrap items-center gap-1" style="min-width:0;max-width:100%">
       <span class="text-slate-400 mr-1">Tilt:</span>
       <button id="btn-tilt-dn" class="px-2 py-1 bg-[#161C24] border border-[#262F3D] text-[#DCA876] rounded hover:border-[#DCA876]">Tilt -</button>
       <button id="btn-tilt-up" class="px-2 py-1 bg-[#161C24] border border-[#262F3D] text-[#DCA876] rounded hover:border-[#DCA876]">Tilt +</button>
       <span class="text-slate-400 ml-2 mr-1">Orbit:</span>
-      <button id="btn-orbit-ccw" class="px-2 py-1 bg-[#161C24] border border-[#262F3D] text-[#DCA876] rounded hover:border-[#DCA876]">Orbit ⟲</button>
-      <button id="btn-orbit-cw" class="px-2 py-1 bg-[#161C24] border border-[#262F3D] text-[#DCA876] rounded hover:border-[#DCA876]">Orbit ⟳</button>
+      <button id="btn-orbit-ccw" class="px-2 py-1 bg-[#161C24] border border-[#262F3D] text-[#DCA876] rounded hover:border-[#DCA876]">Orbit ↺</button>
+      <button id="btn-orbit-cw" class="px-2 py-1 bg-[#161C24] border border-[#262F3D] text-[#DCA876] rounded hover:border-[#DCA876]">Orbit ↻</button>
       <span class="text-slate-400 ml-2 mr-1">Zoom:</span>
       <button id="btn-zoom-out" class="px-2 py-1 bg-[#161C24] border border-[#262F3D] text-[#DCA876] rounded hover:border-[#DCA876]">Zoom -</button>
       <button id="btn-zoom-in" class="px-2 py-1 bg-[#161C24] border border-[#262F3D] text-[#DCA876] rounded hover:border-[#DCA876]">Zoom +</button>
@@ -84,7 +85,7 @@ function initCameraToolbar() {
 
   mapContainer.parentNode.insertBefore(bar, mapContainer);
 
-  const modeBtn = $('btn-toggle-mode');
+  const modeBtn = $('#btn-toggle-mode');
   modeBtn.addEventListener('click', () => {
     cameraState.is3D = !cameraState.is3D;
     modeBtn.textContent = cameraState.is3D ? `3D Pitch (${cameraState.pitch}°)` : '2D Ortho (0°)';
@@ -92,34 +93,34 @@ function initCameraToolbar() {
     notify(`Viewport mode switched to ${cameraState.is3D ? '3D Isometric' : '2D Ortho'}`);
   });
 
-  $('btn-tilt-dn').addEventListener('click', () => {
+  $('#btn-tilt-dn').addEventListener('click', () => {
     cameraState.pitch = Math.max(16, cameraState.pitch - 8);
     if (cameraState.is3D) modeBtn.textContent = `3D Pitch (${cameraState.pitch}°)`;
     applyCameraTransform();
   });
 
-  $('btn-tilt-up').addEventListener('click', () => {
+  $('#btn-tilt-up').addEventListener('click', () => {
     cameraState.pitch = Math.min(64, cameraState.pitch + 8);
     if (cameraState.is3D) modeBtn.textContent = `3D Pitch (${cameraState.pitch}°)`;
     applyCameraTransform();
   });
 
-  $('btn-orbit-ccw').addEventListener('click', () => {
+  $('#btn-orbit-ccw').addEventListener('click', () => {
     cameraState.orbit = (cameraState.orbit - 15) % 360;
     applyCameraTransform();
   });
 
-  $('btn-orbit-cw').addEventListener('click', () => {
+  $('#btn-orbit-cw').addEventListener('click', () => {
     cameraState.orbit = (cameraState.orbit + 15) % 360;
     applyCameraTransform();
   });
 
-  $('btn-zoom-out').addEventListener('click', () => {
+  $('#btn-zoom-out').addEventListener('click', () => {
     cameraState.zoom = Math.max(0.7, cameraState.zoom - 0.1);
     applyCameraTransform();
   });
 
-  $('btn-zoom-in').addEventListener('click', () => {
+  $('#btn-zoom-in').addEventListener('click', () => {
     cameraState.zoom = Math.min(1.8, cameraState.zoom + 0.1);
     applyCameraTransform();
   });
@@ -128,7 +129,7 @@ function initCameraToolbar() {
 }
 
 function init3DHubTowers() {
-  const mapSvg = document.querySelector('svg');
+  const mapSvg = $('#svg-map');
   if (!mapSvg) return;
 
   let layer = document.getElementById('hub-3d-layer');
@@ -172,7 +173,7 @@ function init3DHubTowers() {
 }
 
 function renderPolesAndVehicles(vehicles) {
-  const mapSvg = document.querySelector('svg');
+  const mapSvg = $('#svg-map');
   if (!mapSvg) return;
 
   let poleGroup = document.getElementById('vehicle-poles-layer');
@@ -187,7 +188,7 @@ function renderPolesAndVehicles(vehicles) {
     const isSel = v.id === selectedVehicleId;
     const poleHeight = isSel ? 20 : 12;
     const strokeCol = isSel ? '#65C9B6' : '#DCA876';
-    
+
     html += `
       <g class="vehicle-pole" data-veh-id="${v.id}">
         <ellipse cx="${v.x}" cy="${v.y}" rx="6" ry="3" fill="#10141A" stroke="${strokeCol}" stroke-width="1" opacity="0.5"/>
@@ -201,7 +202,7 @@ function renderPolesAndVehicles(vehicles) {
 
 function renderCargoTwin(vehicle) {
   const inspector = document.getElementById('inspection-panel') || document.getElementById('fleet-inspection-panel') || document.querySelector('.fleet-inspector') || document.getElementById('fleet-panel');
-  
+
   let twinCard = document.getElementById('cargo-bay-digital-twin');
   if (!twinCard) {
     twinCard = document.createElement('div');
@@ -210,7 +211,7 @@ function renderCargoTwin(vehicle) {
     if (inspector) {
       inspector.appendChild(twinCard);
     } else {
-      const sidebar = document.querySelector('aside') || document.body;
+      const sidebar = $('#sec-fleet') || $('#atlas-legacy-workspace');
       sidebar.appendChild(twinCard);
     }
   }
@@ -224,7 +225,7 @@ function renderCargoTwin(vehicle) {
   const rows = 3;
   const cols = 4;
   let drawn = 0;
-  
+
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (drawn >= palletCount) break;
@@ -232,7 +233,7 @@ function renderCargoTwin(vehicle) {
       const bx = 60 + c * 16 - r * 10;
       const by = 70 + r * 8 + c * 4;
       const col = v.reefer ? '#65C9B6' : '#DCA876';
-      
+
       blocksSvg += `
         <polygon points="${bx},${by} ${bx+12},${by-6} ${bx+24},${by} ${bx+12},${by+6}" fill="${col}" opacity="0.8" stroke="#10141A" stroke-width="0.5"/>
         <polygon points="${bx},${by} ${bx+12},${by+6} ${bx+12},${by+14} ${bx},${by+8}" fill="${col}" opacity="0.6" stroke="#10141A" stroke-width="0.5"/>
@@ -246,7 +247,7 @@ function renderCargoTwin(vehicle) {
       <span class="text-[#65C9B6] font-bold tracking-wider">[3D CARGO BAY & THERMAL DIGITAL TWIN]</span>
       <span class="px-1.5 py-0.5 text-[10px] bg-[#161C24] border border-[#65C9B6] text-[#65C9B6] rounded">${v.id}</span>
     </div>
-    
+
     <div class="relative w-full h-36 bg-[#161C24] border border-[#262F3D] rounded overflow-hidden flex items-center justify-center">
       <svg width="220" height="120" viewBox="0 0 220 120" class="w-full h-full">
         <polygon points="30,40 130,10 190,35 90,65" fill="none" stroke="#262F3D" stroke-width="1.5" stroke-dasharray="3,3"/>
@@ -273,7 +274,7 @@ function renderCargoTwin(vehicle) {
 
 function render(snapshot) {
   for (const v of snapshot.vehicles) {
-    const dot = $(`veh-${v.id}`);
+    const dot = $(`veh-${String(v.id).replace(/^V-/, '')}`);
     if (dot) {
       dot.setAttribute('cx', v.x);
       dot.setAttribute('cy', v.y);
@@ -281,33 +282,78 @@ function render(snapshot) {
   }
   renderPolesAndVehicles(snapshot.vehicles);
 
-  const badge = $('atlas-sim-status');
-  if (badge) badge.textContent = `SIM: ${snapshot.status} · TICK ${snapshot.tick} · SPEED ${snapshot.speed}x`;
+  const badge = $('#atlas-sim-status');
+  if (badge) badge.textContent = `SIM: ${snapshot.status} · TICK ${snapshot.tick} · SPEED ${snapshot.speedMultiplier}x`;
 
   const selVeh = snapshot.vehicles.find(v => v.id === selectedVehicleId) || snapshot.vehicles[0];
   if (selVeh) renderCargoTwin(selVeh);
+  if (typeof window.syncPrimarySimUI === 'function') window.syncPrimarySimUI(snapshot);
 }
 
 const statusBadge = document.createElement('span');
 statusBadge.id = 'atlas-sim-status';
 statusBadge.className = 'text-xs font-mono text-[#65C9B6] ml-2';
-const btnPause = $('btn-pause');
+const btnPause = $('#btn-pause');
 if (btnPause && btnPause.parentElement) btnPause.parentElement.appendChild(statusBadge);
 
 if (btnPause) btnPause.addEventListener('click', () => { sim.pause(); notify('Simulation paused.'); });
-const btnPlay = $('btn-play');
+const btnPlay = $('#btn-play');
 if (btnPlay) btnPlay.addEventListener('click', () => { sim.play(); notify('Simulation running.'); });
-const btnStep = $('btn-step');
+const btnStep = $('#btn-step');
 if (btnStep) btnStep.addEventListener('click', () => { sim.step(); notify('Step advanced.'); });
-const btnSpeed = $('btn-speed');
+const btnSpeed = $('#btn-speed');
 if (btnSpeed) btnSpeed.addEventListener('click', () => {
-  const current = sim.getSnapshot().speed;
+  const current = sim.getSnapshot().speedMultiplier;
   const next = current === 1 ? 2 : current === 2 ? 4 : 1;
   sim.setSpeed(next);
   notify(`Simulation speed set to ${next}x.`);
 });
 
 sim.subscribe(render);
+
+function syncLegacyMapAnimations() {
+  const mapSvg = $('#svg-map');
+  if (!mapSvg) return;
+  const legacy = $('#atlas-legacy-workspace');
+  const secOverview = $('#sec-overview');
+  const visible = Boolean(
+    !document.hidden &&
+    legacy && !legacy.hidden && !legacy.classList.contains('hidden') &&
+    secOverview && !secOverview.classList.contains('hidden')
+  );
+  if (visible) {
+    if (typeof mapSvg.unpauseAnimations === 'function') mapSvg.unpauseAnimations();
+  } else {
+    if (typeof mapSvg.pauseAnimations === 'function') mapSvg.pauseAnimations();
+  }
+}
+window.__atlasSyncLegacyMapAnimations = syncLegacyMapAnimations;
+window.addEventListener('hashchange', syncLegacyMapAnimations);
+document.addEventListener('visibilitychange', syncLegacyMapAnimations);
+
+// Browser-local prototype clock; persistent server sandbox is a later stage.
+let intervalId = null;
+function startLocalSimulationTicker() {
+  if (intervalId !== null) return;
+  intervalId = window.setInterval(() => {
+    if (!document.hidden && sim.getSnapshot().status === 'RUNNING') {
+      sim.advance();
+    }
+  }, 1000);
+}
+function stopLocalSimulationTicker() {
+  if (intervalId !== null) {
+    window.clearInterval(intervalId);
+    intervalId = null;
+  }
+}
+startLocalSimulationTicker();
+window.addEventListener('pageshow', startLocalSimulationTicker);
+window.addEventListener('pagehide', () => {
+  stopLocalSimulationTicker();
+  const mapSvg = $('#svg-map');
+  if (mapSvg && typeof mapSvg.pauseAnimations === 'function') mapSvg.pauseAnimations();
+});
 
 document.addEventListener('click', (e) => {
   const pole = e.target.closest('[data-veh-id]');
@@ -329,7 +375,66 @@ if (document.readyState === 'interactive' || document.readyState === 'complete')
   initCameraToolbar();
   init3DHubTowers();
   render(sim.getSnapshot());
+  syncLegacyMapAnimations();
 }
+function initPrimaryControlsBridge() {
+  const getActivePrimaryViewId = () => {
+    if (document.hidden || location.hash === '#legacy') return null;
+    for (const id of ['view-landing', 'view-overview', 'view-map']) {
+      const el = document.getElementById(id);
+      if (el && !el.classList.contains('hidden') && !el.hidden) return id;
+    }
+    return null;
+  };
+  window.syncPrimarySimUI = (snap) => {
+    if (!snap) return;
+    window.simPlaying = snap.status === 'RUNNING';
+    const btn = document.getElementById('sim-play-btn');
+    if (btn) btn.innerText = window.simPlaying ? '⏸' : '▶';
+    const speedSel = document.getElementById('sim-speed');
+    if (speedSel) {
+      const opts = speedSel.querySelectorAll('option');
+      if (opts[0]) opts[0].value = '1';
+      if (opts[1]) opts[1].value = '2';
+      if (opts[2]) { opts[2].value = '4'; opts[2].textContent = '4x'; }
+      speedSel.value = String(snap.speedMultiplier);
+    }
+  };
+  window.setCamMode = function setCamMode(mode) {
+    for (const m of ['free', 'follow', 'chase']) {
+      const node = document.getElementById('cam-' + m);
+      if (node) node.style.color = '#94A3B8';
+    }
+    const el = document.getElementById('cam-' + mode);
+    if (el) el.style.color = '#2DD4BF';
+    if (typeof window.atlasLegacyNotice === 'function') window.atlasLegacyNotice('Camera mode ' + mode + ' is not implemented in 2D prototype.');
+  };
+  window.resetOrbit = function resetOrbit() {
+    if (typeof window.atlasLegacyNotice === 'function') window.atlasLegacyNotice('Orbit reset is not implemented in 2D prototype.');
+  };
+  window.toggleSimPlay = function toggleSimPlay() {
+    const next = window.ATLAS_V21.sim.snapshot().status === 'RUNNING' ? window.ATLAS_V21.sim.pause() : window.ATLAS_V21.sim.play();
+    window.syncPrimarySimUI(next);
+  };
+  window.resetSim = function resetSim() {
+    window.syncPrimarySimUI(window.ATLAS_V21.sim.reset());
+  };
+  window.changePrimarySimSpeed = function changePrimarySimSpeed(val) {
+    window.syncPrimarySimUI(window.ATLAS_V21.sim.setSpeed(Number(val)));
+  };
+  const speedSel = document.getElementById('sim-speed');
+  if (speedSel && !speedSel.__atlasBound) {
+    speedSel.__atlasBound = true;
+    const opts = speedSel.querySelectorAll('option');
+    if (opts[0]) opts[0].value = '1';
+    if (opts[1]) opts[1].value = '2';
+    if (opts[2]) { opts[2].value = '4'; opts[2].textContent = '4x'; }
+    speedSel.addEventListener('change', (e) => window.changePrimarySimSpeed(e.target.value));
+  }
+  window.syncPrimarySimUI(sim.getSnapshot());
+}
+initPrimaryControlsBridge();
+document.addEventListener('DOMContentLoaded', initPrimaryControlsBridge);
 
 window.ATLAS_V21 = {
   sim,
@@ -355,3 +460,4 @@ window.ATLAS_V21 = {
   },
   exportCsv: () => exportShipmentsCsv(shipments)
 };
+

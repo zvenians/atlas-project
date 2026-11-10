@@ -1,9 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><!DOCTYPE html>
-<html lang="en">
-<head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ATLAS — Real-Time Logistics Command Center</title>
@@ -81,6 +78,32 @@
     .z-50 { z-index: 50; }
     button { cursor: pointer; border: none; background: none; color: inherit; }
   </style>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        obsidian: '#10141A',
+        copper: '#DCA876',
+        teal: '#65C9B6',
+        surface: '#161C24',
+        borderDark: '#262F3D'
+      },
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace']
+      }
+    }
+  }
+}
+</script>
+<style>
+#atlas-legacy-workspace { background-color: #10141A; color: #E2E8F0; font-family: 'Inter', sans-serif; }
+#atlas-legacy-workspace .font-mono { font-family: 'JetBrains Mono', monospace; }
+</style>
+
 </head>
 <body>
 
@@ -456,6 +479,7 @@
       document.getElementById('view-map').classList.add('hidden');
       var target = document.getElementById('view-' + v);
       if (target) target.classList.remove('hidden');
+      window.__atlasCanvasLoops?.sync();
       window.scrollTo(0,0);
     }
 
@@ -498,19 +522,64 @@
       }
     }
 
-    function setCamMode(mode) {
-      document.getElementById('cam-free').style.color = '#94A3B8';
-      document.getElementById('cam-follow').style.color = '#94A3B8';
-      document.getElementById('cam-chase').style.color = '#94A3B8';
-      var el = document.getElementById('cam-' + mode);
-      if (el) el.style.color = '#2DD4BF';
+    // Shared lifecycle for the three procedural preview canvases.
+    // Only the visible screen owns an animation frame; no map redesign in P0.
+    const atlasCanvasView = Object.freeze({
+      'atlas-3d-canvas': 'view-landing',
+      'atlas-3d-canvas-mini': 'view-overview',
+      'atlas-3d-canvas-full': 'view-map'
+    });
+    const atlasCanvasControllers = new Map();
+    const atlasMotionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let atlasPageHidden = false;
+
+    function atlasCanvasMayRun(id) {
+      const view = document.getElementById(atlasCanvasView[id]);
+      return Boolean(view && !view.hidden && !view.classList.contains('hidden') &&
+        location.hash !== '#legacy' && !document.hidden && !atlasPageHidden &&
+        !atlasMotionPreference.matches);
     }
-    function resetOrbit() {}
-    function toggleSimPlay() {
-      simPlaying = !simPlaying;
-      document.getElementById('sim-play-btn').innerText = simPlaying ? '⏸' : '▶';
-    }
-    function resetSim() { simPlaying = true; document.getElementById('sim-play-btn').innerText = '⏸'; }
+
+    window.__atlasCanvasLoops = {
+      sync() {
+        for (const [id, controller] of atlasCanvasControllers) {
+          if (atlasCanvasMayRun(id)) controller.start();
+          else {
+            controller.stop();
+            const view = document.getElementById(atlasCanvasView[id]);
+            if (!atlasPageHidden && !document.hidden && atlasMotionPreference.matches &&
+                location.hash !== '#legacy' && view && !view.hidden &&
+                !view.classList.contains('hidden')) controller.drawOnce();
+          }
+        }
+      },
+      stopAll() {
+        for (const controller of atlasCanvasControllers.values()) controller.stop();
+      },
+      getActiveLoopCount() {
+        return [...atlasCanvasControllers.values()].filter(controller => controller.isRunning()).length;
+      },
+      getStats() {
+        return {
+          active: [...atlasCanvasControllers].filter(([, controller]) => controller.isRunning())
+            .map(([id]) => id),
+          initialized: atlasCanvasControllers.size,
+          reducedMotion: atlasMotionPreference.matches,
+          pageHidden: document.hidden || atlasPageHidden
+        };
+      }
+    };
+    document.addEventListener('visibilitychange', () => window.__atlasCanvasLoops.sync());
+    window.addEventListener('hashchange', () => window.__atlasCanvasLoops.sync());
+    atlasMotionPreference.addEventListener('change', () => window.__atlasCanvasLoops.sync());
+    window.addEventListener('pagehide', () => {
+      atlasPageHidden = true;
+      window.__atlasCanvasLoops.stopAll();
+    });
+    window.addEventListener('pageshow', () => {
+      atlasPageHidden = false;
+      window.__atlasCanvasLoops.sync();
+    });
 
     // Pure HTML5 Canvas 3D Isometric Renderer
     function init3DCanvas(canvasId) {
@@ -518,8 +587,10 @@
       if (!canvas) return;
       var ctx = canvas.getContext('2d');
       var t = 0;
+      var scheduledFrame = null;
 
       function render() {
+        scheduledFrame = null;
         var w = canvas.width = canvas.clientWidth || 800;
         var h = canvas.height = canvas.clientHeight || 500;
         ctx.clearRect(0, 0, w, h);
@@ -657,48 +728,38 @@
         ctx.beginPath(); ctx.arc(tp.x + 15, tp.y - 6, 3, 0, Math.PI * 2); ctx.fill();
         ctx.shadowBlur = 0;
 
-        requestAnimationFrame(render);
+        if (atlasCanvasMayRun(canvasId)) scheduledFrame = requestAnimationFrame(render);
       }
-      render();
+
+      const controller = {
+        start() {
+          if (scheduledFrame === null && atlasCanvasMayRun(canvasId)) render();
+        },
+        stop() {
+          if (scheduledFrame !== null) {
+            cancelAnimationFrame(scheduledFrame);
+            scheduledFrame = null;
+          }
+        },
+        drawOnce() {
+          if (scheduledFrame === null) render();
+        },
+        isRunning() { return scheduledFrame !== null; }
+      };
+      atlasCanvasControllers.set(canvasId, controller);
+      if (atlasCanvasMayRun(canvasId)) controller.start();
+      else controller.drawOnce();
     }
 
-    window.addEventListener('load', function() {
-      init3DCanvas('atlas-3d-canvas');
-      init3DCanvas('atlas-3d-canvas-mini');
-      init3DCanvas('atlas-3d-canvas-full');
-    });
+    // Canvas elements are already parsed before this script; initialize once.
+    init3DCanvas('atlas-3d-canvas');
+    init3DCanvas('atlas-3d-canvas-mini');
+    init3DCanvas('atlas-3d-canvas-full');
+    window.__atlasCanvasLoops.sync();
   </script>
-</body>
-</html>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ATLAS — Real-Time Logistics Command Center v2.0.0 Enterprise Flagship</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script>
-tailwind.config = {
-  theme: {
-    extend: {
-      colors: {
-        obsidian: '#10141A',
-        copper: '#DCA876',
-        teal: '#65C9B6',
-        surface: '#161C24',
-        borderDark: '#262F3D'
-      },
-      fontFamily: {
-        sans: ['Inter', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace']
-      }
-    }
-  }
-}
-</script>
-<style>
-body { background-color: #10141A; color: #E2E8F0; font-family: 'Inter', sans-serif; }
-.font-mono { font-family: 'JetBrains Mono', monospace; }
-</style>
-</head>
-<body class="bg-obsidian min-h-screen flex flex-col justify-between text-slate-200">
+
+<section id="atlas-legacy-workspace" class="bg-obsidian min-h-screen flex flex-col justify-between text-slate-200 hidden" hidden aria-label="Legacy operations prototype">
+
 <div>
   <!-- HEADER -->
   <header class="bg-surface border-b border-borderDark px-4 py-3 sticky top-0 z-50 flex flex-wrap items-center justify-between gap-3 shadow-lg">
@@ -719,9 +780,9 @@ body { background-color: #10141A; color: #E2E8F0; font-family: 'Inter', sans-ser
     <div class="flex items-center gap-3 flex-wrap">
       <!-- Sim Controls -->
       <div class="bg-obsidian p-1 rounded border border-borderDark flex items-center gap-1">
-        <button onclick="setSimState('RUNNING')" id="btn-play" class="px-2 py-1 text-xs bg-teal text-obsidian font-bold rounded hover:bg-teal/80">▶ Play</button>
-        <button onclick="setSimState('PAUSED')" id="btn-pause" class="px-2 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600">⏸ Pause</button>
-        <button onclick="stepSim()" class="px-2 py-1 text-xs bg-slate-700 text-slate-200 rounded hover:bg-slate-600">⏭ Step</button>
+        <button id="btn-play" class="px-2 py-1 text-xs bg-teal text-obsidian font-bold rounded hover:bg-teal/80">▶ Play</button>
+        <button id="btn-pause" class="px-2 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600">⏸ Pause</button>
+        <button id="btn-step" class="px-2 py-1 text-xs bg-slate-700 text-slate-200 rounded hover:bg-slate-600">⏭ Step</button>
       </div>
       <!-- Presets -->
       <div class="flex items-center gap-1 text-xs">
@@ -898,7 +959,7 @@ body { background-color: #10141A; color: #E2E8F0; font-family: 'Inter', sans-ser
               <td class="p-3">Mining Equipment (4,200 kg)</td>
               <td class="p-3 font-mono">BPN-TRK-01</td>
               <td class="p-3"><span id="st-9012" class="bg-teal/20 text-teal px-2 py-0.5 rounded font-mono">IN_TRANSIT</span></td>
-              <td class="p-3"><button onclick="alert('Viewing SHP-BPN-9012 Details')" class="text-copper underline">View</button></td>
+              <td class="p-3"><button onclick="atlasLegacyNotice('Shipment detail not migrated; no action taken.')" class="text-copper underline">View</button></td>
             </tr>
             <tr>
               <td class="p-3 font-mono text-copper">SHP-BPN-9013</td>
@@ -906,7 +967,7 @@ body { background-color: #10141A; color: #E2E8F0; font-family: 'Inter', sans-ser
               <td class="p-3">Reefer Cold Cargo (1,800 kg)</td>
               <td class="p-3 font-mono">BPN-TRK-04</td>
               <td class="p-3"><span id="st-9013" class="bg-amber-400/20 text-amber-400 px-2 py-0.5 rounded font-mono">WARNING_TEMP</span></td>
-              <td class="p-3"><button onclick="alert('Viewing SHP-BPN-9013 Details')" class="text-copper underline">View</button></td>
+              <td class="p-3"><button onclick="atlasLegacyNotice('Shipment detail not migrated; no action taken.')" class="text-copper underline">View</button></td>
             </tr>
             <tr>
               <td class="p-3 font-mono text-copper">SHP-BPN-9014</td>
@@ -914,7 +975,7 @@ body { background-color: #10141A; color: #E2E8F0; font-family: 'Inter', sans-ser
               <td class="p-3">General Consumer Goods (850 kg)</td>
               <td class="p-3 font-mono">BPN-VAN-08</td>
               <td class="p-3"><span id="st-9014" class="bg-slate-700 text-slate-300 px-2 py-0.5 rounded font-mono">STAGED</span></td>
-              <td class="p-3"><button onclick="alert('Viewing SHP-BPN-9014 Details')" class="text-copper underline">View</button></td>
+              <td class="p-3"><button onclick="atlasLegacyNotice('Shipment detail not migrated; no action taken.')" class="text-copper underline">View</button></td>
             </tr>
           </tbody>
         </table>
@@ -1263,6 +1324,17 @@ body { background-color: #10141A; color: #E2E8F0; font-family: 'Inter', sans-ser
 
 <!-- SCRIPT LOGIC -->
 <script>
+function atlasLegacyNotice(message) {
+  let node = document.getElementById('atlas-legacy-notice');
+  if (!node) {
+    node = document.createElement('div'); node.id = 'atlas-legacy-notice';
+    node.setAttribute('role','status'); node.setAttribute('aria-live','polite');
+    node.className = 'fixed bottom-4 right-4 z-50 bg-[#10141A] border border-[#DCA876] text-[#F5F1E9] p-3 rounded text-xs shadow-xl max-w-sm';
+    document.body.appendChild(node);
+  }
+  node.textContent = message;
+}
+
 // Virtual Clock
 setInterval(() => {
   const d = new Date();
@@ -1289,8 +1361,8 @@ function switchTab(tabId) {
 const vContainer = document.getElementById('vehicle-dots');
 const vehicleData = [];
 for(let i=1; i<=20; i++) {
-  const x = Math.floor(Math.random() * 700) + 150;
-  const y = Math.floor(Math.random() * 350) + 80;
+  const x = 150 + (i * 37) % 700;
+  const y = 80 + (i * 53) % 350;
   const color = i === 1 ? '#F59E0B' : (i === 4 ? '#EF4444' : '#65C9B6');
   vehicleData.push({ id: i, x, y, color });
   const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -1333,57 +1405,65 @@ function toggleTrafficOverlay() {
 
 // Sim Controls
 function setSimState(st) {
-  alert('Simulation State: ' + st);
+  const sim = window.ATLAS_V21?.sim;
+  if (!sim) return atlasLegacyNotice('Simulation module unavailable.');
+  if (st === 'RUNNING') sim.play(); else if (st === 'PAUSED') sim.pause();
+  else return atlasLegacyNotice('Unsupported state.');
+  atlasLegacyNotice('Local simulation: ' + st);
 }
 function stepSim() {
-  alert('Simulation Stepped (+1 Cycle)');
+  const sim = window.ATLAS_V21?.sim;
+  if (!sim) return atlasLegacyNotice('Simulation module unavailable.');
+  atlasLegacyNotice('Local simulation tick ' + sim.step().tick);
 }
 function changeScenario(val) {
-  alert('Scenario preset updated to: ' + val);
+  try { window.ATLAS_V21.sim.setScenario(val); atlasLegacyNotice('Synthetic preset: ' + val); }
+  catch (e) { atlasLegacyNotice('Scenario not changed: ' + e.message); }
 }
 function changeRole(val) {
-  alert('Active User Role set to: ' + val);
+  atlasLegacyNotice('DEMO PERSONA PREVIEW only: ' + val + '; no server permissions changed.');
 }
 
 // Modal actions
 function openNewShipmentModal() { document.getElementById('modal-new-shipment').classList.remove('hidden'); }
 function openCsvModal() { document.getElementById('modal-csv-import').classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
-function saveNewShipment() {
-  closeModal('modal-new-shipment');
-  alert('New Shipment Created & Enqueued successfully!');
+function saveNewShipment(){ 
+  const fields = document.querySelectorAll('#modal-new-shipment input');
+  const match = fields[2]?.value.match(/\(([\d,]+)\s*kg\)/i);
+  try {
+    const item = window.ATLAS_V21.addShipment({
+      origin: fields[0].value.trim(), destination: fields[1].value.trim(),
+      weightKg: match ? Number(match[1].replaceAll(',', '')) : NaN
+    });
+    closeModal('modal-new-shipment');
+    const tbody = document.getElementById('shipment-tbody');
+    if (tbody) {
+      const row = tbody.insertRow(0);
+      for (const value of [item.id, item.origin, item.destination, String(item.weightKg) + ' kg', item.status]) {
+        const cell = row.insertCell(); cell.className = 'p-3'; cell.textContent = value;
+      }
+    }
+    atlasLegacyNotice(item.id + ' created in browser-local prototype only.');
+  } catch(e) { atlasLegacyNotice('Shipment not created: ' + e.message); }
 }
-function processCsvImport() {
-  closeModal('modal-csv-import');
-  alert('FR-027 Bulk Import Complete: 50 Valid Records Imported!');
-}
-function markReady() {
-  document.getElementById('st-9014').className = 'bg-teal/20 text-teal px-2 py-0.5 rounded font-mono';
-  document.getElementById('st-9014').innerText = 'READY';
-  alert('Shipment SHP-BPN-9014 marked as READY!');
-}
+function processCsvImport() { atlasLegacyNotice("CSV upload is not connected. No records imported."); }
+function markReady() { atlasLegacyNotice("Legacy sample shipment is not in local state. No status changed."); }
 
 // Dispatch actions
-function solveVrp() {
-  document.getElementById('vrp-status-badge').innerText = 'STATUS: BATCH_SOLVED_COMMIT';
-  alert('Global Batch VRP-TW Optimization Solved & Committed!');
-}
-function consolidateLtl() {
-  alert('Multi-Stop LTL Manifest Consolidated (3 Orders merged into TRP-8801)');
-}
+function solveVrp() { atlasLegacyNotice("VRP backend unavailable. No optimization or assignment committed."); }
+function consolidateLtl() { atlasLegacyNotice("LTL consolidation is not implemented. No manifest changed."); }
 function runConcurrencyTest() {
   const out = document.getElementById('dispatch-output');
-  out.classList.remove('hidden');
-  out.innerText = 'CON-01 Concurrency Test: 50 parallel VRP execution threads finished in 142ms. 0 Race Conditions detected. Lock Integrity: OK.';
+  if (out) { out.classList.remove('hidden'); out.textContent = 'No concurrency test executed: server transaction layer unavailable.'; }
+  atlasLegacyNotice('No benchmark or race-safety claim made.');
 }
 
 // Fleet actions
 function injectReeferBreach() {
-  document.getElementById('reefer-temp-val').innerText = '+8.0°C (BREACH)';
-  document.getElementById('reefer-temp-val').className = 'font-mono font-bold text-red-500';
-  document.getElementById('st-9013').innerText = 'REEFER_BREACH';
-  document.getElementById('st-9013').className = 'bg-red-500/20 text-red-400 px-2 py-0.5 rounded font-mono';
-  alert('Alert Injected: Reefer Temp Breach (+4.8°C Spike recorded)!');
+  const el = document.getElementById('reefer-temp-val');
+  if (el) { el.innerText = '+8.0°C (LOCAL VISUAL SCENARIO)'; el.className = 'font-mono font-bold text-red-500'; }
+  atlasLegacyNotice('Local visual scenario only; no server alert created.');
 }
 function toggleMaintenance() {
   const el = document.getElementById('maint-status-01');
@@ -1434,19 +1514,16 @@ function draw(e) {
 function clearCanvas() {
   if(ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
-function submitEpod() {
-  document.getElementById('sha256-val').innerText = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08';
-  alert('e-POD Signature Submitted & SHA-256 Geotag Hash Verified!');
-}
+function submitEpod() { atlasLegacyNotice("e-POD submission not connected. No verified signature hash generated."); }
 
 let isOffline = false;
 function toggleOfflineMode() {
   isOffline = !isOffline;
   const btn = document.getElementById('btn-offline');
   if(isOffline) {
-    btn.innerText = 'ON (Queue: 2 item)';
+    btn.innerText = 'ON (Queue: 0 items)';
     btn.className = 'bg-amber-400/20 border border-amber-400 px-2 py-1 rounded text-xs font-mono text-amber-400';
-    localStorage.setItem('atlas_offline_queue', JSON.stringify(['EPOD-8801-SIG']));
+    localStorage.setItem('atlas_offline_queue', JSON.stringify([]));
   } else {
     btn.innerText = 'OFF (Synced)';
     btn.className = 'bg-obsidian border border-borderDark px-2 py-1 rounded text-xs font-mono text-teal';
@@ -1461,25 +1538,46 @@ function ackAlert(id) {
   btn.className = 'bg-slate-700 text-slate-300 px-2 py-1 rounded';
 }
 function resolveAlert(id) {
-  const note = prompt('Mandatory resolution note for INC-881' + id + ':');
-  if(note) {
-    document.getElementById('alert-card-' + id).remove();
-    alert('Incident Resolved with note: ' + note);
-  }
+  const note = prompt('Required local incident resolution note:');
+  if (!note?.trim()) return atlasLegacyNotice('Resolution canceled: note required.');
+  document.getElementById('alert-card-' + id)?.remove();
+  atlasLegacyNotice('Local card dismissed; no server audit persisted.');
 }
 function saveRuleThresholds(e) {
   e.preventDefault();
-  alert('FR-033 Thresholds updated successfully!');
+  atlasLegacyNotice('Rule thresholds not saved: backend unavailable.');
 }
 
 // Analytics actions
-function compactPartitions() {
-  alert('PART-01 Telemetry Partition Compaction executed successfully!');
-}
+function compactPartitions() { atlasLegacyNotice("Partition compaction unavailable. No operation executed."); }
 function exportCsv() {
-  alert('SEC-08 Safe CSV Export initiated.');
+  if (!window.ATLAS_V21) return atlasLegacyNotice('CSV module unavailable.');
+  const rows = window.ATLAS_V21.getShipments();
+  if (!rows.length) return atlasLegacyNotice('No local shipments to export.');
+  const url = URL.createObjectURL(new Blob([window.ATLAS_V21.exportCsv()], {type:'text/csv;charset=utf-8'}));
+  const link = document.createElement('a'); link.href = url; link.download = 'atlas-local-shipments.csv';
+  document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+  atlasLegacyNotice('Exported ' + rows.length + ' local shipments.');
 }
 </script>
 <script type="module" src="/src/legacy-integration.js"></script>
+
+</section>
+<script>
+(function () {
+  const legacy = document.getElementById('atlas-legacy-workspace');
+  function syncWorkspace() {
+    const isLegacy = location.hash === '#legacy';
+    legacy.hidden = !isLegacy; legacy.classList.toggle('hidden', !isLegacy);
+    for (const id of ['view-landing', 'view-overview', 'view-map']) {
+      const view = document.getElementById(id);
+      if (view && isLegacy) view.classList.add('hidden');
+    }
+    if (!isLegacy && typeof switchView === 'function') switchView('landing');
+  }
+  window.addEventListener('hashchange', syncWorkspace);
+  syncWorkspace();
+})();
+</script>
 </body>
 </html>
