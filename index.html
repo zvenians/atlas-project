@@ -495,7 +495,7 @@ window.tailwind.config = {
           </div>
 
           <!-- OPTION B: SYNCHRONIZED CONTEXT MINI-MAP INSET (BOTTOM-LEFT OF MAP CARD) -->
-          <div id="context-mini-map" style="display: none;" class="absolute bottom-7 left-3 z-20 bg-[#151B22]/95 border border-[#39464F] rounded-lg p-2.5 w-44 sm:w-48 shadow-2xl text-xs font-mono flex flex-col gap-1.5 select-none">
+          <div id="context-mini-map" style="display: none;" class="absolute bottom-[96px] lg:bottom-7 left-3 z-20 bg-[#151B22]/95 border border-[#39464F] rounded-lg p-2.5 w-44 sm:w-48 shadow-2xl text-xs font-mono flex flex-col gap-1.5 select-none transition-all duration-300">
             <div class="flex items-center justify-between text-[10px] font-bold text-[#65C9B6]">
               <span id="mini-map-badge-title">GEO-DERIVED ROUTE DIAGRAM</span>
               <span id="mini-map-id">TRK-004</span>
@@ -705,16 +705,19 @@ window.tailwind.config = {
       const chevron = document.getElementById('mob-sheet-chevron');
       const details = document.getElementById('mob-sheet-details');
       const summary = document.getElementById('mob-sheet-summary');
+      const miniMap = document.getElementById('context-mini-map');
       if (isExpanded) {
         if (sheet) { sheet.style.height = '260px'; sheet.classList.remove('h-[88px]'); sheet.classList.add('h-[260px]'); }
         if (chevron) chevron.innerText = '⌄';
         if (details) details.classList.remove('hidden');
         if (summary) summary.classList.add('hidden');
+        if (miniMap) { miniMap.classList.add('opacity-0', 'pointer-events-none'); }
       } else {
         if (sheet) { sheet.style.height = '88px'; sheet.classList.remove('h-[260px]'); sheet.classList.add('h-[88px]'); }
         if (chevron) chevron.innerText = '⌃';
         if (details) details.classList.add('hidden');
         if (summary) summary.classList.remove('hidden');
+        if (miniMap) { miniMap.classList.remove('opacity-0', 'pointer-events-none'); }
       }
     }
     function toggleMobileLayers() {

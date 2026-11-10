@@ -762,20 +762,22 @@ export class Atlas3DEngine {
     const speedMult = snap.speedMultiplier || 1;
     const scenario = snap.scenario || 'NORMAL_DELIVERY';
 
-    // Base tick rate advancement
-    const scenarioRate = scenario === 'TRAFFIC_DELAY' ? 0.0004 : (scenario === 'VEHICLE_STOP' ? 0 : 0.0008);
-    const tickDelta = tick * scenarioRate * speedMult;
-
-    // Update progression deterministically
+    // Base tick rate advancement and deterministic progression derived from simulation clock
     for (let i = 0; i < 20; i++) {
       const vr = this.vehicleRoutes[i];
       if (!vr) continue;
 
+      // Realistic fleet behavior: when VEHICLE_STOP is triggered, stopped vehicles hold (0 speed),
+      // while other vehicles in the commercial fleet continue traversing their assigned corridors
+      const isVehicleStopped = (scenario === 'VEHICLE_STOP' && (i % 4 === 0));
+      const baseRate = scenario === 'TRAFFIC_DELAY' ? 0.0004 : (isVehicleStopped ? 0 : 0.0008);
+      const rateFactor = 0.85 + (i % 5) * 0.08;
+      const tickDelta = tick * baseRate * speedMult * rateFactor;
+
       if (tick === 0) {
         this._routeProgressions[i] = this._initialProgress[i];
       } else {
-        const rateFactor = 0.85 + (i % 5) * 0.08;
-        this._routeProgressions[i] = (this._initialProgress[i] + tickDelta * rateFactor) % 1.0;
+        this._routeProgressions[i] = (this._initialProgress[i] + tickDelta) % 1.0;
       }
 
       const pos = interpolateRoute(vr.waypoints, this._routeProgressions[i]);
@@ -918,12 +920,25 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     const snap = sim ? sim.getSnapshot() : { status: 'RUNNING', speedMultiplier: 1, tick: 0, scenario: 'NORMAL_DELIVERY' };
     const isStopped = snap.scenario === 'VEHICLE_STOP' && (index % 4 === 0);
     const isDelayed = snap.scenario === 'TRAFFIC_DELAY';
-    const speedKmh = isStopped ? 0 : (isDelayed ? 24 : Math.round(38 + (index * 3) % 15));
+
+    // Derive simulated speed strictly from actual route displacement and virtual simulation clock
+    const totalDistMeters = vr.totalDistanceMeters || 14400;
+    const rateFactor = 0.85 + (index % 5) * 0.08;
+    const baseRatePerSec = isDelayed ? 0.0004 : 0.0008;
+    const effectiveRatePerSec = isStopped ? 0 : (baseRatePerSec * rateFactor);
+    const displacementMps = effectiveRatePerSec * totalDistMeters;
+    const speedKmh = isStopped ? 0 : Math.round(displacementMps * 3.6);
+
     const statusStr = isStopped ? 'Stationary (Hold)' : (isDelayed ? 'Traffic Delay' : 'In Transit');
     const statusColor = isStopped ? '#EF4444' : (isDelayed ? '#F59E0B' : '#2DD4BF');
 
-    const etaMinutes = Math.round((Number(remainingKm) / Math.max(speedKmh, 20)) * 60);
-    const etaStr = `${etaMinutes}m remaining (${remainingKm} km)`;
+    // True ETA: handles stopped vehicles without division-by-zero or fake baseline
+    const nominalSpeedKmh = Math.max(20, Math.round((0.0008 * rateFactor * totalDistMeters) * 3.6));
+    const nominalEtaMin = Math.round((Number(remainingKm) / nominalSpeedKmh) * 60);
+    const etaMinutes = isStopped ? nominalEtaMin : Math.round((Number(remainingKm) / Math.max(speedKmh, 15)) * 60);
+    const etaStr = isStopped
+      ? `HOLD (${remainingKm} km · ${nominalEtaMin}m nominal)`
+      : `${etaMinutes}m remaining (${remainingKm} km)`;
     const vehicleSpec = VEHICLE_TYPES[index % VEHICLE_TYPES.length];
     const truckType = vehicleSpec?.label || 'Commercial Hauler';
     // Type-aware badge colour for mobile sheet
@@ -960,7 +975,10 @@ _updateCalloutPosition(index = this.selectedVehicle) {
           }
         }
         const line2 = document.getElementById('callout-line-2');
-        if (line2) line2.textContent = `${speedKmh} km/h · simulated · ${etaMinutes}m ETA`;
+        if (line2) {
+          const etaCallout = isStopped ? 'HOLD' : `${etaMinutes}m ETA`;
+          line2.textContent = `${speedKmh} km/h · simulated · ${etaCallout}`;
+        }
 
         // Maintain innerText fallback for test assert compatibility
         if (!line1) {
@@ -978,15 +996,15 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     const mobSpeed = document.getElementById('mob-truck-speed');
     if (mobSpeed) mobSpeed.textContent = `${speedKmh} km/h`;
     const mobEta = document.getElementById('mob-truck-eta');
-    if (mobEta) mobEta.textContent = `ETA ${etaMinutes} min`;
+    if (mobEta) mobEta.textContent = isStopped ? 'HOLD' : `ETA ${etaMinutes} min`;
     const mobDriver = document.getElementById('mob-sheet-driver');
     if (mobDriver) mobDriver.textContent = fleetInfo.driver;
     const mobRoute = document.getElementById('mob-sheet-route');
     if (mobRoute) mobRoute.textContent = routeStr;
     const mobSpeedLg = document.getElementById('mob-sheet-speed-large');
-    if (mobSpeedLg) mobSpeedLg.textContent = `${speedKmh} km/h`;
+    if (mobSpeedLg) mobSpeedLg.textContent = isStopped ? '0 km/h (Stationary)' : `${speedKmh} km/h`;
     const mobEtaLg = document.getElementById('mob-sheet-eta-large');
-    if (mobEtaLg) mobEtaLg.textContent = `${etaMinutes} min ETA`;
+    if (mobEtaLg) mobEtaLg.textContent = isStopped ? `HOLD (${nominalEtaMin}m nominal)` : `${etaMinutes} min ETA`;
     const mobTick = document.getElementById('mob-sheet-tick');
     if (mobTick) mobTick.textContent = `SIMULATED • virtual tick ${snap.tick}`;
     // Update mobile vehicle-type badge colour to match vehicle class
@@ -1469,21 +1487,46 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     ground.position.y = -0.05;
     scene.add(ground);
 
-    // Soft radial ground contact shadow under mounted vehicle
+    // Soft realistic multi-axle ground contact shadow under mounted vehicle
     let shadowTex = null;
     if (typeof document !== 'undefined') {
       try {
         const shadowCanvas = document.createElement('canvas');
         shadowCanvas.width = 128;
-        shadowCanvas.height = 256;
+        shadowCanvas.height = 512;
         const sCtx = shadowCanvas.getContext('2d');
         if (sCtx) {
-          const sGrad = sCtx.createRadialGradient(64, 128, 10, 64, 128, 64);
-          sGrad.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
-          sGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.35)');
-          sGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          sCtx.fillStyle = sGrad;
-          sCtx.fillRect(0, 0, 128, 256);
+          sCtx.clearRect(0, 0, 128, 512);
+
+          // 1. Full-rig soft ambient occlusion underneath chassis and container
+          const bodyGrad = sCtx.createRadialGradient(64, 256, 12, 64, 256, 160);
+          bodyGrad.addColorStop(0, 'rgba(0, 0, 0, 0.65)');
+          bodyGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.30)');
+          bodyGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          sCtx.fillStyle = bodyGrad;
+          sCtx.fillRect(16, 40, 96, 432);
+
+          // 2. Front Steer Axle shadow (z ≈ +6.4, canvas y ≈ 75)
+          const steerGrad = sCtx.createRadialGradient(64, 75, 5, 64, 75, 40);
+          steerGrad.addColorStop(0, 'rgba(0, 0, 0, 0.78)');
+          steerGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          sCtx.fillStyle = steerGrad;
+          sCtx.fillRect(16, 40, 96, 70);
+
+          // 3. Tractor Tandem Drive Axles shadow (z ≈ +1.3 to +2.6, canvas y ≈ 200)
+          const driveGrad = sCtx.createRadialGradient(64, 200, 8, 64, 200, 52);
+          driveGrad.addColorStop(0, 'rgba(0, 0, 0, 0.80)');
+          driveGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          sCtx.fillStyle = driveGrad;
+          sCtx.fillRect(16, 155, 96, 90);
+
+          // 4. Trailer Tri-Axle Bogie shadow cluster (z ≈ -5.0 to -7.6, canvas y ≈ 440)
+          const bogieGrad = sCtx.createRadialGradient(64, 440, 10, 64, 440, 58);
+          bogieGrad.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
+          bogieGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          sCtx.fillStyle = bogieGrad;
+          sCtx.fillRect(16, 385, 96, 110);
+
           shadowTex = new THREE.CanvasTexture(shadowCanvas);
         }
       } catch {}
