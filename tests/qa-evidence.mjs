@@ -10,11 +10,12 @@ const root=process.cwd();
 const out='artifacts/p0-browser';
 mkdirSync(out,{recursive:true});
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8',
-'.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8'};
+'.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8', '.mjs':'text/javascript; charset=utf-8' };
 const server=createServer((req,res)=>{
   const url=new URL(req.url,'http://localhost');
   const target=resolve(root,'.'+(url.pathname==='/'?'/index.html':decodeURIComponent(url.pathname)));
-  if(target!==root && !target.startsWith(root+'/')) {res.writeHead(403);res.end('Forbidden');return;}
+  const nRoot = root.replace(/\\/g, '/'); const nTarget = target.replace(/\\/g, '/');
+  if(nTarget!==nRoot && !nTarget.startsWith(nRoot+'/')) {res.writeHead(403);res.end('Forbidden');return;}
   try {
     const body=readFileSync(target);
     res.writeHead(200,{'content-type':mime[extname(target)]??'application/octet-stream'});res.end(body);
