@@ -2,7 +2,7 @@
 
 **Document Version:** 4.2.0  
 **Repository:** `zvenians/atlas-project`  
-**Target Branch:** `feat/atlas-true-3d-visual-upgrade`  
+**Historical validation branch:** `feat/atlas-true-3d-visual-upgrade`  
 **Draft PR:** [Draft PR #4](https://github.com/zvenians/atlas-project/pull/4)  
 **Baseline Commit:** `1c8f9b19aa4a182f5e8eebcba1e64319d840069c`  
 **Execution Environment:** Windows Server / Node.js v24.21.0 / Playwright Chromium (SwiftShader WebGL)  
@@ -12,7 +12,7 @@
 
 ## 1. Executive Summary & Gate Status Matrix
 
-In ATLAS Hermes Real-World Visual Fidelity Lock v4.2, the 3D rendering pipeline was upgraded from a static straight-plane tracking view to an **authoritative route-derived curved 3D road ribbon system**, mathematically synchronized with OpenStreetMap road waypoints, vehicle coordinates, headings, camera viewports, and the Context Mini-Map vector projection.
+In ATLAS 3D visual fidelity update v4.2, the 3D rendering pipeline was upgraded from a static straight-plane tracking view to an **authoritative route-derived curved 3D road ribbon system**, mathematically synchronized with OpenStreetMap road waypoints, vehicle coordinates, headings, camera viewports, and the Context Mini-Map vector projection.
 
 | Gate | Criterion | Status | Empirical Evidence |
 |---|---|---|---|

@@ -1,8 +1,7 @@
 # ATLAS True 3D Geospatial Visual Upgrade
 
 **Project:** ATLAS — Real-Time Logistics Command Center  
-**Branch:** `feat/atlas-true-3d-visual-upgrade`  
-**Base Branch:** `fix/atlas-p0-stabilization`  
+**Release scope:** ATLAS 3D visualization and fleet tracking  
 **Owner:** Kevin Oloan Simatupang  
 **Scope:** True WebGL 3D Upgrade for S01 Landing, S02 Overview, and S03 Live Map  
 

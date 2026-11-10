@@ -3,7 +3,7 @@
 
 **Project:** ATLAS — Real-Time Logistics Command Center  
 **Verification Date:** November 6, 2026  
-**Standards:** Hermes Realism Lock v4.0  
+**Standards:** ATLAS visual fidelity review v4.0  
 **Status:** All entries verified against official provider documentation, legal licenses, and technical compatibility.
 
 ---
@@ -190,7 +190,7 @@
 
 ---
 
-## 5. Summary of Architecture Decisions (Hermes Realism Lock v4.0)
+## 5. Summary of Architecture Decisions (ATLAS visual fidelity review v4.0)
 
 | Component | Selected Source | Reason | Status |
 |:---|:---|:---|:---:|
@@ -220,7 +220,7 @@
 
 ---
 
-## 7. Hermes Realism Lock v4.1 Visual Recovery & Physics Truth Audit
+## 7. ATLAS visual fidelity review v4.1 Visual Recovery & Physics Truth Audit
 
 ### 7.1 Defect A: MapLibre 6.x Matrix Interface Resolution
 - **Issue:** MapLibre GL JS v6.16.0 passes custom layer `render(gl, options)` options as an object containing `defaultProjectionData.mainMatrix`, not a flat Float64Array. Passing this directly to `new THREE.Matrix4().fromArray()` set all elements to `undefined` (NaN vertices), causing complete GPU culling.
@@ -255,7 +255,7 @@
 
 ---
 
-## 8. Hermes Realism Lock v4.1.1 CI Camera & Telemetry Hotfix Audit
+## 8. ATLAS visual fidelity review v4.1.1 CI Camera & Telemetry Hotfix Audit
 
 ### 8.1 CI Overview Camera Transition Completion (tests/3d-evidence.mjs:326)
 - **Defect:** Remote GitHub Actions runner failed on `assert.ok(camOverview.zoom <= 13)` (`zoom: 13.1085`). `map.flyTo` had a 1200ms duration, while the test sampled camera state prematurely at 800ms during mid-flight deceleration on slower CI hardware.

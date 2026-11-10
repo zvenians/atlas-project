@@ -1,4 +1,4 @@
-# ATLAS Hermes v4.2 — Baseline Root-Cause Audit
+# ATLAS v4.2 — Baseline Root-Cause Audit
 
 **Date:** 2026-11-09  
 **Git Baseline Reference:** `1c8f9b19aa4a182f5e8eebcba1e64319d840069c`  
