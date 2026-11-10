@@ -509,6 +509,629 @@ function getWindshieldTexture(THREE) {
  * Features true 40-foot proportions (12.2m container), 22 tires across 6 axles,
  * corrugated container panels with shipping liveries, and authentic chassis details.
  */
+
+/**
+ * Creates high-resolution procedural box truck side panel texture (Class 2).
+ * Features industrial composite panels, rivet rows, ATLAS logistics branding, and DOT-C2 tape.
+ */
+function getBoxTruckSideTexture(THREE, colorHex, index) {
+  if (typeof document === 'undefined') return null;
+  const key = `box-side-${colorHex}-${index % 5}`;
+  if (_textureCache.has(key)) return _textureCache.get(key);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const hexStr = '#' + (colorHex || 0xEDEFEF).toString(16).padStart(6, '0');
+  ctx.fillStyle = hexStr;
+  ctx.fillRect(0, 0, 1024, 256);
+
+  // Subtle vertical panel seams (structural composite panels every 128px)
+  for (let x = 64; x < 1024; x += 128) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+    ctx.fillRect(x - 1, 0, 2, 256);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.fillRect(x + 1, 0, 1, 256);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    for (let y = 16; y < 240; y += 24) {
+      ctx.beginPath();
+      ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Brand header: ATLAS LOGISTICS INDONESIA
+  ctx.save();
+  ctx.fillStyle = '#0F172A';
+  ctx.font = 'bold 36px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('ATLAS', 140, 95);
+  ctx.fillStyle = '#0D9488'; // Teal brand accent
+  ctx.fillText('LOGISTICS', 265, 95);
+
+  ctx.font = '600 13px "Segoe UI", Arial, sans-serif';
+  ctx.fillStyle = '#475569';
+  ctx.fillText('KIK KARIANGAU INTERMODAL FREIGHT CORRIDOR', 142, 122);
+
+  // Fleet unit number badge
+  const unitNum = `UNIT BX-${String((index || 0) + 1).padStart(3, '0')}`;
+  ctx.fillStyle = '#1E293B';
+  ctx.fillRect(142, 142, 130, 26);
+  ctx.fillStyle = '#F8FAFC';
+  ctx.font = 'bold 12px monospace';
+  ctx.fillText(unitNum, 154, 159);
+
+  // Specifications block
+  ctx.font = '10px monospace';
+  ctx.fillStyle = '#64748B';
+  ctx.fillText('MAX GVW: 16,000 KG | NET PAYLOAD: 11,200 KG', 290, 150);
+  ctx.fillText('VOLUMETRIC CUBE: 48.5 M³ | TARE: 4,800 KG', 290, 166);
+  ctx.fillText('CALL CENTER: 0800-1-ATLAS (HOTLINE 24 JAM)', 142, 196);
+
+  // Left side brand emblem (tactical chevron)
+  ctx.fillStyle = '#0D9488';
+  ctx.beginPath();
+  ctx.moveTo(85, 60);
+  ctx.lineTo(115, 110);
+  ctx.lineTo(85, 160);
+  ctx.lineTo(55, 110);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#0F172A';
+  ctx.beginPath();
+  ctx.arc(85, 110, 12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Bottom DOT-C2 Red / White Reflective Conspicuity Tape (14px high)
+  const tapeY = 240;
+  for (let x = 0; x < 1024; x += 64) {
+    ctx.fillStyle = '#DC2626';
+    ctx.fillRect(x, tapeY, 32, 14);
+    ctx.fillStyle = '#F8FAFC';
+    ctx.fillRect(x + 32, tapeY, 32, 14);
+  }
+
+  // Top corner silver L-brackets
+  ctx.fillStyle = '#CBD5E1';
+  ctx.fillRect(6, 6, 24, 6);
+  ctx.fillRect(6, 6, 6, 24);
+  ctx.fillRect(994, 6, 24, 6);
+  ctx.fillRect(1012, 6, 6, 24);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  _textureCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Creates roll-up shutter door texture for Box Truck rear (Class 2).
+ */
+function getBoxTruckDoorTexture(THREE) {
+  if (typeof document === 'undefined') return null;
+  const key = 'box-door-texture';
+  if (_textureCache.has(key)) return _textureCache.get(key);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.fillStyle = '#1E293B';
+  ctx.fillRect(0, 0, 512, 512);
+
+  // Roll-up shutter door panel (26 horizontal extruded aluminum slats)
+  const slatCount = 26;
+  const slatH = 430 / slatCount;
+  for (let s = 0; s < slatCount; s++) {
+    const sy = 24 + s * slatH;
+    const grad = ctx.createLinearGradient(0, sy, 0, sy + slatH);
+    grad.addColorStop(0, '#CBD5E1');
+    grad.addColorStop(0.5, '#94A3B8');
+    grad.addColorStop(1, '#64748B');
+    ctx.fillStyle = grad;
+    ctx.fillRect(24, sy, 464, slatH - 2);
+
+    ctx.fillStyle = '#1E293B';
+    ctx.fillRect(24, sy + slatH - 2, 464, 2);
+  }
+
+  // Heavy bottom pull handle and locking latch
+  ctx.fillStyle = '#0F172A';
+  ctx.fillRect(206, 410, 100, 24);
+  ctx.fillStyle = '#E2E8F0';
+  ctx.fillRect(216, 416, 80, 12);
+  ctx.fillStyle = '#F59E0B';
+  ctx.fillRect(246, 396, 20, 16);
+
+  // Rear safety chevron band across bottom 36px (yellow / black 45° stripes)
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(24, 456, 464, 36);
+  ctx.clip();
+  ctx.fillStyle = '#FACC15';
+  ctx.fillRect(24, 456, 464, 36);
+  ctx.fillStyle = '#0F172A';
+  for (let x = -50; x < 550; x += 36) {
+    ctx.beginPath();
+    ctx.moveTo(x, 492);
+    ctx.lineTo(x + 24, 492);
+    ctx.lineTo(x + 50, 456);
+    ctx.lineTo(x + 26, 456);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Perimeter red/white DOT tape
+  for (let x = 24; x < 488; x += 40) {
+    ctx.fillStyle = '#DC2626';
+    ctx.fillRect(x, 8, 20, 12);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(x + 20, 8, 20, 12);
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  _textureCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Creates high-resolution procedural reefer side texture (Class 3).
+ * Insulated polyurethane composite wall, cold chain graphics, ATP certification, and DOT-C2 tape.
+ */
+function getReeferSideTexture(THREE) {
+  if (typeof document === 'undefined') return null;
+  const key = 'reefer-side-texture';
+  if (_textureCache.has(key)) return _textureCache.get(key);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.fillStyle = '#F8FAFC';
+  ctx.fillRect(0, 0, 1024, 256);
+
+  for (let x = 128; x < 1024; x += 128) {
+    ctx.fillStyle = 'rgba(148, 163, 184, 0.2)';
+    ctx.fillRect(x, 0, 2, 256);
+  }
+
+  // Cyan & deep navy thermal stripe across mid-body
+  ctx.fillStyle = '#0284C7';
+  ctx.fillRect(0, 110, 1024, 10);
+  ctx.fillStyle = '#0EA5E9';
+  ctx.fillRect(0, 120, 1024, 4);
+  ctx.fillStyle = '#38BDF8';
+  ctx.fillRect(0, 124, 1024, 2);
+
+  // Brand & thermal cold chain insignia
+  ctx.save();
+  ctx.fillStyle = '#0C4A6E';
+  ctx.font = 'bold 32px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('ATLAS', 150, 85);
+  ctx.fillStyle = '#0284C7';
+  ctx.fillText('COLD CHAIN', 255, 85);
+
+  ctx.font = '600 13px "Segoe UI", Arial, sans-serif';
+  ctx.fillStyle = '#0369A1';
+  ctx.fillText('THERMAL INTERMODAL FLEET • BALIKPAPAN DEEPWATER REEFER', 152, 104);
+
+  // Snowflake emblem on left
+  ctx.strokeStyle = '#0284C7';
+  ctx.lineWidth = 4;
+  const cx = 90, cy = 75;
+  for (let a = 0; a < 3; a++) {
+    const angle = (a * Math.PI) / 3;
+    ctx.beginPath();
+    ctx.moveTo(cx - Math.cos(angle) * 32, cy - Math.sin(angle) * 32);
+    ctx.lineTo(cx + Math.cos(angle) * 32, cy + Math.sin(angle) * 32);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+  ctx.fillStyle = '#38BDF8';
+  ctx.fill();
+
+  // Temperature Spec stamp
+  ctx.fillStyle = '#0F172A';
+  ctx.font = 'bold 12px monospace';
+  ctx.fillText('ATP FRC CERTIFIED | -25°C TO +15°C CONTROLLED', 152, 155);
+  ctx.font = '11px monospace';
+  ctx.fillStyle = '#475569';
+  ctx.fillText('INSULATED POLYURETHANE COMPOSITE (K-VALUE <= 0.40 W/m²K)', 152, 172);
+  ctx.fillText('PAYLOAD CAP: 26,500 KG | TARE: 7,850 KG | 68.2 M³', 152, 188);
+
+  // Temperature setpoint digital badge
+  ctx.fillStyle = '#0284C7';
+  ctx.fillRect(750, 48, 220, 50);
+  ctx.fillStyle = '#0F172A';
+  ctx.fillRect(754, 52, 212, 42);
+  ctx.fillStyle = '#38BDF8';
+  ctx.font = 'bold 18px monospace';
+  ctx.fillText('SET: -22.0°C', 768, 80);
+  ctx.fillStyle = '#22C55E';
+  ctx.font = 'bold 10px monospace';
+  ctx.fillText('STATUS: RUNNING', 872, 79);
+  ctx.restore();
+
+  // Bottom DOT-C2 Red / White Reflective Conspicuity Tape (16px high)
+  const tapeY = 238;
+  for (let x = 0; x < 1024; x += 64) {
+    ctx.fillStyle = '#DC2626';
+    ctx.fillRect(x, tapeY, 32, 16);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(x + 32, tapeY, 32, 16);
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  _textureCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Creates bulkhead refrigeration unit texture (Thermo King style SLXi).
+ */
+function getReeferUnitTexture(THREE) {
+  if (typeof document === 'undefined') return null;
+  const key = 'reefer-unit-texture';
+  if (_textureCache.has(key)) return _textureCache.get(key);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.fillStyle = '#1E293B';
+  ctx.fillRect(0, 0, 512, 256);
+
+  // Large cooling fan intake round grille
+  const fanGrad = ctx.createRadialGradient(140, 128, 10, 140, 128, 90);
+  fanGrad.addColorStop(0, '#0F172A');
+  fanGrad.addColorStop(0.7, '#334155');
+  fanGrad.addColorStop(1, '#64748B');
+  ctx.fillStyle = fanGrad;
+  ctx.beginPath();
+  ctx.arc(140, 128, 85, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#94A3B8';
+  ctx.lineWidth = 1.5;
+  for (let r = 20; r <= 80; r += 15) {
+    ctx.beginPath();
+    ctx.arc(140, 128, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  for (let a = 0; a < 8; a++) {
+    const angle = (a * Math.PI) / 4;
+    ctx.beginPath();
+    ctx.moveTo(140, 128);
+    ctx.lineTo(140 + Math.cos(angle) * 85, 128 + Math.sin(angle) * 85);
+    ctx.stroke();
+  }
+
+  // Digital LED Control Panel (Right Side)
+  ctx.fillStyle = '#0F172A';
+  ctx.fillRect(280, 40, 200, 170);
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(280, 40, 200, 170);
+
+  ctx.fillStyle = '#E2E8F0';
+  ctx.font = 'bold 13px "Segoe UI", sans-serif';
+  ctx.fillText('THERMO-ATLAS 9000', 295, 65);
+
+  ctx.fillStyle = '#051E14';
+  ctx.fillRect(295, 78, 170, 52);
+  ctx.fillStyle = '#10B981';
+  ctx.font = 'bold 24px monospace';
+  ctx.fillText('-21.8°C', 310, 114);
+
+  ctx.fillStyle = '#22C55E';
+  ctx.beginPath(); ctx.arc(310, 152, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#94A3B8';
+  ctx.font = '10px monospace';
+  ctx.fillText('COMPRESSOR: ACTIVE', 325, 156);
+
+  ctx.fillStyle = '#38BDF8';
+  ctx.beginPath(); ctx.arc(310, 176, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.fillText('DEFROST: AUTO', 325, 180);
+
+  ctx.fillStyle = '#E2E8F0';
+  ctx.fillText('SET: -22.0°C | DIESEL: 94%', 295, 202);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  _textureCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Creates stainless steel thermal double rear doors texture for Reefer (Class 3).
+ */
+function getReeferRearDoorTexture(THREE) {
+  if (typeof document === 'undefined') return null;
+  const key = 'reefer-door-texture';
+  if (_textureCache.has(key)) return _textureCache.get(key);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const grad = ctx.createLinearGradient(0, 0, 512, 0);
+  grad.addColorStop(0, '#CBD5E1');
+  grad.addColorStop(0.3, '#E2E8F0');
+  grad.addColorStop(0.5, '#F8FAFC');
+  grad.addColorStop(0.7, '#E2E8F0');
+  grad.addColorStop(1, '#94A3B8');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 512, 512);
+
+  ctx.fillStyle = '#0F172A';
+  ctx.fillRect(0, 0, 512, 16);
+  ctx.fillRect(0, 496, 512, 16);
+  ctx.fillRect(0, 0, 16, 512);
+  ctx.fillRect(496, 0, 16, 512);
+  ctx.fillRect(252, 0, 8, 512);
+
+  const rodX = [100, 200, 312, 412];
+  for (const rx of rodX) {
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(rx - 4, 20, 8, 472);
+    ctx.fillStyle = '#F1F5F9';
+    ctx.fillRect(rx - 2, 20, 4, 472);
+    ctx.fillStyle = '#1E293B';
+    ctx.fillRect(rx - 12, 24, 24, 16);
+    ctx.fillRect(rx - 12, 472, 24, 16);
+    ctx.fillStyle = '#0F172A';
+    ctx.fillRect(rx - 20, 240, 40, 16);
+    ctx.fillStyle = '#F59E0B';
+    ctx.fillRect(rx - 6, 236, 12, 8);
+  }
+
+  ctx.fillStyle = '#DC2626';
+  ctx.fillRect(40, 80, 160, 40);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = 'bold 11px Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('PERINGATAN SUHU DINGIN', 120, 98);
+  ctx.font = '9px Arial, sans-serif';
+  ctx.fillText('TEMP: -25°C S/D +15°C', 120, 112);
+
+  ctx.fillStyle = '#0F172A';
+  ctx.fillRect(300, 80, 160, 56);
+  ctx.fillStyle = '#38BDF8';
+  ctx.font = 'bold 13px monospace';
+  ctx.fillText('ATLAS REEFER', 380, 102);
+  ctx.fillStyle = '#F8FAFC';
+  ctx.font = '10px monospace';
+  ctx.fillText('FRC 08/2029', 380, 118);
+  ctx.fillText('BALIKPAPAN DEEPWATER', 380, 130);
+  ctx.textAlign = 'start';
+
+  for (let x = 20; x < 490; x += 40) {
+    ctx.fillStyle = '#DC2626';
+    ctx.fillRect(x, 472, 20, 16);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(x + 20, 472, 20, 16);
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  _textureCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Creates high-gloss polished aluminum tanker shell texture with UN 1203 placards (Class 4).
+ */
+function getTankerSideTexture(THREE) {
+  if (typeof document === 'undefined') return null;
+  const key = 'tanker-side-texture';
+  if (_textureCache.has(key)) return _textureCache.get(key);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const grad = ctx.createLinearGradient(0, 0, 0, 512);
+  grad.addColorStop(0, '#64748B');
+  grad.addColorStop(0.2, '#CBD5E1');
+  grad.addColorStop(0.35, '#F8FAFC');
+  grad.addColorStop(0.5, '#CBD5E1');
+  grad.addColorStop(0.75, '#94A3B8');
+  grad.addColorStop(1, '#475569');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 1024, 512);
+
+  // Circumferential TIG Welded Seam Lines
+  for (const wx of [200, 420, 640, 840]) {
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
+    ctx.fillRect(wx - 2, 0, 4, 512);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.fillRect(wx, 0, 1.5, 512);
+  }
+
+  // Draw UN 1203 Class 3 Flammable Liquid Diamond Placard
+  const drawPlacard = (px, py) => {
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = '#DC2626';
+    ctx.fillRect(-35, -35, 70, 70);
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(-31, -31, 62, 62);
+    ctx.rotate(-Math.PI / 4);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 20px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('1203', 0, 14);
+    ctx.font = 'bold 11px Arial';
+    ctx.fillText('3', 0, 32);
+    ctx.restore();
+  };
+
+  drawPlacard(310, 256);
+  drawPlacard(740, 256);
+
+  ctx.save();
+  ctx.fillStyle = '#0F172A';
+  ctx.font = 'bold 24px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('PERTAMINA LOGISTICS', 450, 220);
+  ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
+  ctx.fillStyle = '#DC2626';
+  ctx.fillText('MUATAN MUDAH TERBAKAR • DILARANG MEROKOK', 450, 246);
+
+  ctx.font = '12px monospace';
+  ctx.fillStyle = '#1E293B';
+  ctx.fillText('KAPASITAS: 32.000 LITER (3 KOMPARTEMEN)', 450, 274);
+  ctx.fillText('TEKANAN KERJA: 2.65 BAR | UJI HIDRO: 2026/08', 450, 292);
+  ctx.fillText('EMERGENCY CUTOFF SWITCH AT REAR BUMPER', 450, 310);
+  ctx.restore();
+
+  ctx.fillStyle = '#F59E0B';
+  for (const ex of [240, 480, 720]) {
+    ctx.fillRect(ex, 440, 80, 18);
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 10px monospace';
+    ctx.fillText('EMERGENCY', ex + 6, 453);
+    ctx.fillStyle = '#F59E0B';
+  }
+
+  for (let x = 0; x < 1024; x += 64) {
+    ctx.fillStyle = '#DC2626';
+    ctx.fillRect(x, 470, 32, 14);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(x + 32, 470, 32, 14);
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  _textureCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Creates weathered Indonesian teak/ironwood plank texture for Lowboy deck (Class 5).
+ */
+function getLowboyDeckTexture(THREE) {
+  if (typeof document === 'undefined') return null;
+  const key = 'lowboy-deck-texture';
+  if (_textureCache.has(key)) return _textureCache.get(key);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.fillStyle = '#5A3D28';
+  ctx.fillRect(0, 0, 1024, 256);
+
+  const plankH = 256 / 8;
+  for (let p = 0; p < 8; p++) {
+    const py = p * plankH;
+    const tone = ((p * 17) % 25) - 12;
+    ctx.fillStyle = `rgb(${90 + tone}, ${61 + tone}, ${40 + tone})`;
+    ctx.fillRect(0, py + 1, 1024, plankH - 2);
+
+    ctx.fillStyle = '#26180E';
+    ctx.fillRect(0, py + plankH - 2, 1024, 2);
+
+    ctx.fillStyle = 'rgba(38, 24, 14, 0.25)';
+    for (let g = 0; g < 4; g++) {
+      ctx.fillRect(0, py + 4 + g * 6, 1024, 1);
+    }
+
+    ctx.fillStyle = '#1E293B';
+    for (let x = 40; x < 1024; x += 80) {
+      ctx.beginPath();
+      ctx.arc(x, py + plankH / 2, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.fillStyle = '#1E293B';
+  ctx.fillRect(0, 0, 1024, 10);
+  ctx.fillRect(0, 246, 1024, 10);
+
+  ctx.fillStyle = '#94A3B8';
+  for (let x = 60; x < 1024; x += 120) {
+    ctx.fillRect(x, 2, 16, 6);
+    ctx.fillRect(x, 248, 16, 6);
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2, 1);
+  _textureCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Creates high-visibility "MUATAN BERAT" / "OVERSIZE LOAD" banner texture.
+ */
+function getOversizeBannerTexture(THREE) {
+  if (typeof document === 'undefined') return null;
+  const key = 'oversize-banner-texture';
+  if (_textureCache.has(key)) return _textureCache.get(key);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.fillStyle = '#FACC15';
+  ctx.fillRect(0, 0, 512, 128);
+
+  ctx.fillStyle = '#0F172A';
+  for (let x = -30; x < 90; x += 24) {
+    ctx.beginPath();
+    ctx.moveTo(x, 128);
+    ctx.lineTo(x + 14, 128);
+    ctx.lineTo(x + 38, 0);
+    ctx.lineTo(x + 24, 0);
+    ctx.closePath();
+    ctx.fill();
+  }
+  for (let x = 420; x < 540; x += 24) {
+    ctx.beginPath();
+    ctx.moveTo(x, 128);
+    ctx.lineTo(x + 14, 128);
+    ctx.lineTo(x + 38, 0);
+    ctx.lineTo(x + 24, 0);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.strokeStyle = '#0F172A';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(3, 3, 506, 122);
+
+  ctx.fillStyle = '#0F172A';
+  ctx.font = '900 36px "Segoe UI", Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('MUATAN BERAT', 256, 68);
+  ctx.font = 'bold 18px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('OVERSIZE LOAD • ESCORT REQUIRED', 256, 102);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  _textureCache.set(key, tex);
+  return tex;
+}
+
 function createContainerSemiTruck(THREE, spec, index) {
   const group = new THREE.Group();
   group.name = `truck-${index}`;
@@ -955,6 +1578,11 @@ export function createTruckMesh(THREE, spec, index) {
   group.name = `truck-${index}`;
 
   // Shared Physically Based Materials for Non-Container Fleet
+  const tireTex = getTireTexture(THREE);
+  const rimTex = getWheelRimTexture(THREE);
+  const grilleTex = getGrilleTexture(THREE);
+  const windshieldTex = getWindshieldTexture(THREE);
+
   const cabPaintMat = new THREE.MeshStandardMaterial({
     color: spec.cabinColor,
     roughness: 0.22,
@@ -975,16 +1603,25 @@ export function createTruckMesh(THREE, spec, index) {
 
   const glassMat = new THREE.MeshStandardMaterial({
     color: 0x1E293B,
-    roughness: 0.05,
-    metalness: 0.2,
+    map: windshieldTex || null,
+    roughness: 0.08,
+    metalness: 0.25,
     transparent: true,
-    opacity: 0.72,
+    opacity: 0.82,
   });
 
   const rubberMat = new THREE.MeshStandardMaterial({
-    color: 0x11161F,
-    roughness: 0.88,
-    metalness: 0.04,
+    color: 0x14181F,
+    map: tireTex || null,
+    roughness: 0.85,
+    metalness: 0.05,
+  });
+
+  const rimMat = new THREE.MeshStandardMaterial({
+    color: 0xCBD5E1,
+    map: rimTex || null,
+    roughness: 0.25,
+    metalness: 0.85,
   });
 
   const cabW = spec.width * 0.94;
@@ -1029,9 +1666,17 @@ export function createTruckMesh(THREE, spec, index) {
   roof.castShadow = true;
   cabGroup.add(roof);
 
-  // Front Radiator Grille
+  // Front Radiator Grille with PBR Honeycomb Texture
   const grilleGeo = new THREE.BoxGeometry(cabW * 0.68, cabH * 0.36, 0.14);
-  const grille = new THREE.Mesh(grilleGeo, chromeMat);
+  const grille = new THREE.Mesh(
+    grilleGeo,
+    new THREE.MeshStandardMaterial({
+      color: 0xE2E8F0,
+      map: grilleTex || null,
+      roughness: 0.18,
+      metalness: 0.88,
+    })
+  );
   grille.position.set(0, 1.25, cabD * 0.45 + 0.05);
   cabGroup.add(grille);
 
@@ -1046,6 +1691,7 @@ export function createTruckMesh(THREE, spec, index) {
   const plateBase = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.16, 0.02), new THREE.MeshStandardMaterial({ color: 0x0A0F1D, roughness: 0.4 }));
   plateBase.position.set(0, 0.62, cabD * 0.45 + 0.24);
   cabGroup.add(plateBase);
+
   const plateText = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.10, 0.01), new THREE.MeshBasicMaterial({ color: 0xF8FAFC }));
   plateText.position.set(0, 0.62, cabD * 0.45 + 0.252);
   cabGroup.add(plateText);
@@ -1059,7 +1705,7 @@ export function createTruckMesh(THREE, spec, index) {
     cabGroup.add(hl);
   }
 
-  // Windshield
+  // Windshield with procedural solar tint and reflection
   const windshieldGeo = new THREE.PlaneGeometry(cabW * 0.88, cabH * 0.36);
   windshieldGeo.rotateX(-0.24);
   const windshield = new THREE.Mesh(windshieldGeo, glassMat);
@@ -1114,15 +1760,47 @@ export function createTruckMesh(THREE, spec, index) {
     const boxH = spec.height * 0.68;
     const boxL = spec.trailerLen;
 
-    const boxMat = new THREE.MeshStandardMaterial({
-      color: 0xEDEFEF,
+    const boxSideTex = getBoxTruckSideTexture(THREE, spec.trailerColor, index);
+    const boxDoorTex = getBoxTruckDoorTexture(THREE);
+
+    const boxSideMat = new THREE.MeshStandardMaterial({
+      color: spec.trailerColor,
+      map: boxSideTex || null,
       roughness: 0.35,
-      metalness: 0.25,
+      metalness: 0.22,
     });
+
+    const boxRoofMat = new THREE.MeshStandardMaterial({
+      color: 0xCBD5E1,
+      roughness: 0.6,
+      metalness: 0.4,
+    });
+
+    const boxFrontMat = new THREE.MeshStandardMaterial({
+      color: spec.trailerColor,
+      roughness: 0.35,
+      metalness: 0.22,
+    });
+
+    const boxDoorMat = new THREE.MeshStandardMaterial({
+      color: 0xEDEFEF,
+      map: boxDoorTex || null,
+      roughness: 0.45,
+      metalness: 0.65,
+    });
+
+    const boxMaterials = [
+      boxSideMat,
+      boxSideMat,
+      boxRoofMat,
+      darkSteelMat,
+      boxFrontMat,
+      boxDoorMat,
+    ];
 
     const boxBody = new THREE.Mesh(
       new THREE.BoxGeometry(boxW, boxH, boxL),
-      boxMat
+      boxMaterials
     );
     boxBody.position.set(0, 0.82 + boxH / 2, 0.1);
     boxBody.castShadow = true;
@@ -1146,15 +1824,6 @@ export function createTruckMesh(THREE, spec, index) {
     deflector.scale.set(1, 0.7, 1.2);
     boxGroup.add(deflector);
 
-    // Rear Roll-up Shutter Door with Handle
-    const shutter = new THREE.Mesh(
-      new THREE.PlaneGeometry(boxW * 0.82, boxH * 0.88),
-      darkSteelMat
-    );
-    shutter.position.set(0, 0.82 + boxH / 2, -boxL / 2 + 0.09);
-    shutter.rotation.y = Math.PI;
-    boxGroup.add(shutter);
-
     // Side Underrun Guardrails (DOT Bars)
     const guardGeo = new THREE.BoxGeometry(0.06, 0.12, boxL * 0.7);
     for (const gx of [-boxW / 2 - 0.05, boxW / 2 + 0.05]) {
@@ -1171,15 +1840,48 @@ export function createTruckMesh(THREE, spec, index) {
     const rH = spec.height * 0.72;
     const rL = spec.trailerLen;
 
-    const reeferMat = new THREE.MeshStandardMaterial({
+    const reeferSideTex = getReeferSideTexture(THREE);
+    const reeferUnitTex = getReeferUnitTexture(THREE);
+    const reeferDoorTex = getReeferRearDoorTexture(THREE);
+
+    const reeferSideMat = new THREE.MeshStandardMaterial({
       color: 0xF8FAFC,
-      roughness: 0.18,
+      map: reeferSideTex || null,
+      roughness: 0.2,
       metalness: 0.15,
     });
 
+    const reeferRoofMat = new THREE.MeshStandardMaterial({
+      color: 0xF1F5F9,
+      roughness: 0.4,
+      metalness: 0.2,
+    });
+
+    const reeferFrontMat = new THREE.MeshStandardMaterial({
+      color: 0xF8FAFC,
+      roughness: 0.25,
+      metalness: 0.15,
+    });
+
+    const reeferDoorMat = new THREE.MeshStandardMaterial({
+      color: 0xF8FAFC,
+      map: reeferDoorTex || null,
+      roughness: 0.2,
+      metalness: 0.85,
+    });
+
+    const reeferMaterials = [
+      reeferSideMat,
+      reeferSideMat,
+      reeferRoofMat,
+      darkSteelMat,
+      reeferFrontMat,
+      reeferDoorMat,
+    ];
+
     const reeferBody = new THREE.Mesh(
       new THREE.BoxGeometry(rW, rH, rL),
-      reeferMat
+      reeferMaterials
     );
     reeferBody.position.set(0, 0.85 + rH / 2, 0);
     reeferBody.castShadow = true;
@@ -1190,15 +1892,20 @@ export function createTruckMesh(THREE, spec, index) {
     unitGroup.position.set(0, 0.85 + rH * 0.65, rL / 2 + 0.32);
 
     const compHousing = new THREE.Mesh(
-      new THREE.BoxGeometry(rW * 0.75, rH * 0.45, 0.55),
+      new THREE.BoxGeometry(rW * 0.78, rH * 0.46, 0.55),
       darkSteelMat
     );
     unitGroup.add(compHousing);
 
-    // Front Cooling Fan Intake Louvers
+    // Front Cooling Fan Intake Louvers & LED display face
     const louverMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(rW * 0.62, rH * 0.32, 0.06),
-      chromeMat
+      new THREE.BoxGeometry(rW * 0.72, rH * 0.42, 0.08),
+      new THREE.MeshStandardMaterial({
+        color: 0xCBD5E1,
+        map: reeferUnitTex || null,
+        roughness: 0.4,
+        metalness: 0.5,
+      })
     );
     louverMesh.position.z = 0.28;
     unitGroup.add(louverMesh);
@@ -1208,7 +1915,7 @@ export function createTruckMesh(THREE, spec, index) {
       new THREE.SphereGeometry(0.04, 8, 8),
       new THREE.MeshBasicMaterial({ color: 0x22C55E })
     );
-    led.position.set(-rW * 0.28, 0.12, 0.32);
+    led.position.set(-rW * 0.32, 0.12, 0.34);
     unitGroup.add(led);
 
     reeferGroup.add(unitGroup);
@@ -1216,18 +1923,10 @@ export function createTruckMesh(THREE, spec, index) {
     // Aerodynamic Underside Side Skirt Fairings
     const skirtGeo = new THREE.BoxGeometry(0.05, 0.42, rL * 0.55);
     for (const sx of [-rW / 2 + 0.02, rW / 2 - 0.02]) {
-      const skirt = new THREE.Mesh(skirtGeo, reeferMat);
+      const skirt = new THREE.Mesh(skirtGeo, reeferSideMat);
       skirt.position.set(sx, 0.55, 0.3);
       reeferGroup.add(skirt);
     }
-
-    // Polished Stainless Steel Rear Doors with Dual Locking Rods
-    const rearDoors = new THREE.Mesh(
-      new THREE.BoxGeometry(rW * 0.96, rH * 0.94, 0.05),
-      chromeMat
-    );
-    rearDoors.position.set(0, 0.85 + rH / 2, -rL / 2 - 0.02);
-    reeferGroup.add(rearDoors);
 
     group.add(reeferGroup);
   } else if (spec.type === 'tanker') {
@@ -1237,14 +1936,17 @@ export function createTruckMesh(THREE, spec, index) {
     const tRadiusX = spec.width * 0.48;
     const tRadiusY = spec.height * 0.38;
 
+    const tankerSideTex = getTankerSideTexture(THREE);
+
     const tankMat = new THREE.MeshStandardMaterial({
       color: 0xE2E8F0,
-      roughness: 0.14,
-      metalness: 0.94, // High-gloss polished aluminum
+      map: tankerSideTex || null,
+      roughness: 0.15,
+      metalness: 0.92, // High-gloss polished aluminum
     });
 
     // Main Elliptical Cylindrical Tank Body
-    const tankGeo = new THREE.CylinderGeometry(tRadiusX, tRadiusX, tLen, 24);
+    const tankGeo = new THREE.CylinderGeometry(tRadiusX, tRadiusX, tLen, 28);
     tankGeo.rotateX(Math.PI / 2);
     tankGeo.scale(1, tRadiusY / tRadiusX, 1); // Elliptical cross section
     const tankMesh = new THREE.Mesh(tankGeo, tankMat);
@@ -1289,24 +1991,14 @@ export function createTruckMesh(THREE, spec, index) {
       tankerGroup.add(hoseTube);
     }
 
-    // Hazmat Class 3 Flammable Liquid Diamond Placards (UN 1203)
-    const placardGeo = new THREE.PlaneGeometry(0.35, 0.35);
-    placardGeo.rotateZ(Math.PI / 4); // Diamond orientation
-    const placardMat = new THREE.MeshBasicMaterial({ color: 0xDC2626 }); // Flammable Red
-
-    for (const px of [-tRadiusX - 0.02, tRadiusX + 0.02]) {
-      const plac = new THREE.Mesh(placardGeo, placardMat);
-      plac.position.set(px, 1.82, -tLen * 0.3);
-      if (px > 0) plac.rotation.y = Math.PI / 2;
-      else plac.rotation.y = -Math.PI / 2;
-      tankerGroup.add(plac);
+    // Rear Access Ladder
+    const ladderRungGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.42, 8);
+    ladderRungGeo.rotateZ(Math.PI / 2);
+    for (let r = 0; r < 6; r++) {
+      const rung = new THREE.Mesh(ladderRungGeo, chromeMat);
+      rung.position.set(0, 1.0 + r * 0.22, -tLen / 2 - 0.22);
+      tankerGroup.add(rung);
     }
-
-    // Rear Placard
-    const rearPlac = new THREE.Mesh(placardGeo, placardMat);
-    rearPlac.position.set(0, 1.82, -tLen / 2 - 0.24);
-    rearPlac.rotation.y = Math.PI;
-    tankerGroup.add(rearPlac);
 
     group.add(tankerGroup);
   } else {
@@ -1314,6 +2006,9 @@ export function createTruckMesh(THREE, spec, index) {
     const flatGroup = new THREE.Group();
     const fW = spec.width;
     const fL = spec.trailerLen;
+
+    const lowboyDeckTex = getLowboyDeckTexture(THREE);
+    const bannerTex = getOversizeBannerTexture(THREE);
 
     // Heavy Drop-Deck Structural Steel Frame
     const deckFrame = new THREE.Mesh(
@@ -1326,7 +2021,8 @@ export function createTruckMesh(THREE, spec, index) {
 
     // Realistic Textured Wood-Plank Flooring Deck
     const woodMat = new THREE.MeshStandardMaterial({
-      color: 0x785338, // Weathered Hardwood Planks
+      color: 0x785338,
+      map: lowboyDeckTex || null,
       roughness: 0.85,
       metalness: 0.05,
     });
@@ -1344,12 +2040,34 @@ export function createTruckMesh(THREE, spec, index) {
     rack.castShadow = true;
     flatGroup.add(rack);
 
+    // Oversize Load Warning Banner on Headache Rack
+    const bannerMat = new THREE.MeshStandardMaterial({
+      map: bannerTex || null,
+      roughness: 0.4,
+      metalness: 0.1,
+    });
+    const banner = new THREE.Mesh(
+      new THREE.PlaneGeometry(fW * 0.85, 0.38),
+      bannerMat
+    );
+    banner.position.set(0, 2.05, fL / 2 - 0.02);
+    flatGroup.add(banner);
+
+    // Rear Bumper Warning Banner
+    const rearBanner = new THREE.Mesh(
+      new THREE.PlaneGeometry(fW * 0.82, 0.28),
+      bannerMat
+    );
+    rearBanner.position.set(0, 0.68, -fL / 2 - 0.02);
+    rearBanner.rotation.y = Math.PI;
+    flatGroup.add(rearBanner);
+
     // Industrial Cargo Payloads (alternates between machinery crates & steel I-beams)
     const cargoGroup = new THREE.Group();
     if (index % 2 === 0) {
       // High-Voltage Diesel Generator Crate & Heavy Equipment
       const crateMat = new THREE.MeshStandardMaterial({
-        color: 0xCA8A04, // Caterpillar Industrial Equipment Yellow
+        color: 0xCA8A04,
         roughness: 0.5,
         metalness: 0.35,
       });
@@ -1394,7 +2112,7 @@ export function createTruckMesh(THREE, spec, index) {
     group.add(flatGroup);
   }
 
-  // --- 4. Multi-Axle Wheel Assemblies with 24-Segment Tires, Chrome Hubs & Lug Nuts ---
+  // --- 4. Multi-Axle Wheel Assemblies with PBR Textured Tires, Alloy Rims & Lug Indicators ---
   const tireRadius = 0.52;
   const tireWidth = 0.32;
   const rimRadius = 0.32;
@@ -1402,24 +2120,28 @@ export function createTruckMesh(THREE, spec, index) {
   // Wheel Geometry: Vulcanized Rubber Tire with Chrome Inset Rim
   function buildWheelAssembly() {
     const wheelGroup = new THREE.Group();
+    wheelGroup.name = 'wheel-assembly';
 
     // Tire outer cylinder
     const tireGeo = new THREE.CylinderGeometry(tireRadius, tireRadius, tireWidth, 24);
     tireGeo.rotateZ(Math.PI / 2);
     const tire = new THREE.Mesh(tireGeo, rubberMat);
+    tire.name = 'tire';
     tire.castShadow = true;
     wheelGroup.add(tire);
 
-    // Inset chrome wheel rim flange
+    // Inset chrome wheel rim flange with 10-hole PBR alloy texture
     const rimGeo = new THREE.CylinderGeometry(rimRadius, rimRadius, tireWidth + 0.02, 24);
     rimGeo.rotateZ(Math.PI / 2);
-    const rim = new THREE.Mesh(rimGeo, chromeMat);
+    const rim = new THREE.Mesh(rimGeo, rimMat);
+    rim.name = 'rim';
     wheelGroup.add(rim);
 
-    // Central hubcap
+    // Central hubcap with grease cap
     const hubCapGeo = new THREE.CylinderGeometry(0.12, 0.12, tireWidth + 0.06, 12);
     hubCapGeo.rotateZ(Math.PI / 2);
     const hubCap = new THREE.Mesh(hubCapGeo, darkSteelMat);
+    hubCap.name = 'hubcap';
     wheelGroup.add(hubCap);
 
     // High-performance lug nut ring
@@ -1449,35 +2171,18 @@ export function createTruckMesh(THREE, spec, index) {
   for (const axle of axleConfigs) {
     for (const side of [-1, 1]) {
       const wheel = buildWheelAssembly();
-      wheel.position.set(side * (spec.width / 2 + 0.08), tireRadius, axle.z);
+      wheel.position.set(side * (spec.width / 2 + 0.04), tireRadius, axle.z);
       group.add(wheel);
       wheelsList.push(wheel);
 
-      // If dual wheels, add inner paired wheel assembly for heavy commercial realism
+      // Inner Paired Wheel for Heavy Dual Axles
       if (axle.isDual) {
         const innerWheel = buildWheelAssembly();
-        innerWheel.position.set(side * (spec.width / 2 - 0.24), tireRadius, axle.z);
+        innerWheel.position.set(side * (spec.width / 2 - 0.26), tireRadius, axle.z);
         group.add(innerWheel);
         wheelsList.push(innerWheel);
       }
     }
-  }
-
-  // Heavy Rubber Mud Flaps behind Rearmost Axle
-  const mudFlapGeo = new THREE.BoxGeometry(0.38, 0.62, 0.04);
-  for (const side of [-spec.width / 2 - 0.05, spec.width / 2 + 0.05]) {
-    const mudFlap = new THREE.Mesh(mudFlapGeo, darkSteelMat);
-    mudFlap.position.set(side, 0.42, -spec.trailerLen / 2 + 0.15);
-    mudFlap.castShadow = true;
-    group.add(mudFlap);
-
-    // Red reflective safety stripe on mud flap
-    const stripe = new THREE.Mesh(
-      new THREE.BoxGeometry(0.34, 0.08, 0.01),
-      new THREE.MeshBasicMaterial({ color: 0xEF4444 })
-    );
-    stripe.position.set(side, 0.25, -spec.trailerLen / 2 + 0.12);
-    group.add(stripe);
   }
 
   // --- 5. DOT-C2 Compliant Red/White Rear Tail Light Cluster ---
@@ -1529,10 +2234,6 @@ export function createTruckMesh(THREE, spec, index) {
   return group;
 }
 
-/**
- * Commercial 3D Asset candidates and qualification status for TRK-001 Hero Vehicle.
- * Gate G1: BLOCKED until licensed PBR 6x4 tractor + 40ft container GLB is procured.
- */
 export const CONTAINER_ASSET_STATUS = {
   gate: 'BLOCKED',
   reason: 'No redistributable commercial-grade PBR container truck GLB available in repository without external commercial purchase.',

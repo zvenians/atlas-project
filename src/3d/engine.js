@@ -42,6 +42,179 @@ const FLEET_DATA = [
  * Authoritative ATLAS 3D Geospatial Engine.
  * Integrates MapLibre GL JS with custom Three.js WebGL layer for deterministic logistics simulation.
  */
+
+const _engineTextureCache = new Map();
+
+function getHighwayGantrySignTexture(THREE) {
+  if (typeof document === 'undefined') return null;
+  const key = 'gantry-exit-sign';
+  if (_engineTextureCache.has(key)) return _engineTextureCache.get(key);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 384;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.fillStyle = '#047857';
+  ctx.fillRect(0, 0, 1024, 384);
+
+  ctx.strokeStyle = '#F8FAFC';
+  ctx.lineWidth = 10;
+  ctx.strokeRect(10, 10, 1004, 364);
+  ctx.lineWidth = 4;
+  ctx.strokeRect(24, 24, 976, 336);
+
+  ctx.fillStyle = '#F8FAFC';
+  ctx.font = 'bold 32px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('TOL BALIKPAPAN - SAMARINDA', 60, 80);
+
+  ctx.fillStyle = '#FACC15';
+  ctx.font = 'bold 44px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('EXIT KM 13 • KARIANGAU (KKT)', 60, 150);
+
+  ctx.fillStyle = '#F8FAFC';
+  ctx.font = 'bold 36px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('KAWASAN INDUSTRI KIK • PELABUHAN SEMAYANG', 60, 215);
+
+  ctx.fillStyle = '#93C5FD';
+  ctx.font = '600 24px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('JALUR UTAMA TRUK KONTAINER & HAZMAT (IKN LOGISTIK)', 60, 265);
+
+  ctx.save();
+  ctx.translate(900, 180);
+  ctx.fillStyle = '#FACC15';
+  ctx.beginPath();
+  ctx.moveTo(0, -60);
+  ctx.lineTo(40, -10);
+  ctx.lineTo(15, -10);
+  ctx.lineTo(15, 60);
+  ctx.lineTo(-15, 60);
+  ctx.lineTo(-15, -10);
+  ctx.lineTo(-40, -10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  const tex = new THREE.CanvasTexture(canvas);
+  _engineTextureCache.set(key, tex);
+  return tex;
+}
+
+function getHighwayServiceSignTexture(THREE) {
+  if (typeof document === 'undefined') return null;
+  const key = 'gantry-service-sign';
+  if (_engineTextureCache.has(key)) return _engineTextureCache.get(key);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.fillStyle = '#1D4ED8';
+  ctx.fillRect(0, 0, 512, 256);
+
+  ctx.strokeStyle = '#F8FAFC';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(8, 8, 496, 240);
+
+  ctx.fillStyle = '#F8FAFC';
+  ctx.font = 'bold 28px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('REST AREA KM 13', 40, 65);
+
+  ctx.fillStyle = '#FACC15';
+  ctx.font = 'bold 22px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('SPBU PERTAMINA 24 JAM', 40, 115);
+
+  ctx.fillStyle = '#F8FAFC';
+  ctx.font = '20px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('JEMBATAN TIMBANG (WIM)', 40, 155);
+  ctx.fillText('DEREK RESMI: 14080', 40, 195);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  _engineTextureCache.set(key, tex);
+  return tex;
+}
+
+function getSpeedLimitSignTexture(THREE) {
+  if (typeof document === 'undefined') return null;
+  const key = 'speed-limit-sign';
+  if (_engineTextureCache.has(key)) return _engineTextureCache.get(key);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.fillStyle = '#F8FAFC';
+  ctx.beginPath();
+  ctx.arc(128, 128, 120, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#DC2626';
+  ctx.lineWidth = 26;
+  ctx.beginPath();
+  ctx.arc(128, 128, 107, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = '#0F172A';
+  ctx.font = '900 100px "Segoe UI", Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('60', 128, 128);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  _engineTextureCache.set(key, tex);
+  return tex;
+}
+
+function getContainerStackTexture(THREE, colorHex, brandName, code) {
+  if (typeof document === 'undefined') return null;
+  const key = `cont-stack-${colorHex}-${brandName}`;
+  if (_engineTextureCache.has(key)) return _engineTextureCache.get(key);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const hexStr = '#' + (colorHex || 0x006837).toString(16).padStart(6, '0');
+  ctx.fillStyle = hexStr;
+  ctx.fillRect(0, 0, 512, 256);
+
+  const numFlutes = 32;
+  const fluteW = 512 / numFlutes;
+  for (let i = 0; i < numFlutes; i++) {
+    const fx = i * fluteW;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    ctx.fillRect(fx, 0, fluteW * 0.45, 256);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.fillRect(fx + fluteW * 0.45, 0, fluteW * 0.1, 256);
+  }
+
+  ctx.save();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = 'bold 36px "Segoe UI", Arial, sans-serif';
+  ctx.fillText(brandName || 'EVERGREEN', 70, 140);
+  ctx.font = 'bold 16px monospace';
+  ctx.fillText(code || 'EISU 894012 3', 70, 175);
+  ctx.restore();
+
+  for (let x = 0; x < 512; x += 32) {
+    ctx.fillStyle = '#DC2626';
+    ctx.fillRect(x, 244, 16, 12);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(x + 16, 244, 16, 12);
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  _engineTextureCache.set(key, tex);
+  return tex;
+}
+
 export class Atlas3DEngine {
   constructor() {
     this.map = null;
@@ -1592,6 +1765,10 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     }
 
     // Cached PBR materials for route-derived corridor
+    const gantryGreenTex = getHighwayGantrySignTexture(THREE);
+    const gantryBlueTex = getHighwayServiceSignTexture(THREE);
+    const speedLimitTex = getSpeedLimitSignTexture(THREE);
+
     this._trackingMaterials = {
       road: new THREE.MeshStandardMaterial({
         color: 0x1E252D,
@@ -1609,7 +1786,11 @@ _updateCalloutPosition(index = this.selectedVehicle) {
         new THREE.MeshStandardMaterial({ color: 0x1E293B, roughness: 0.85, metalness: 0.25 }),
         new THREE.MeshStandardMaterial({ color: 0x263142, roughness: 0.85, metalness: 0.25 }),
         new THREE.MeshStandardMaterial({ color: 0x1B2636, roughness: 0.85, metalness: 0.25 })
-      ]
+      ],
+      drain: new THREE.MeshStandardMaterial({ color: 0x3E4C59, roughness: 0.94, metalness: 0.08 }),
+      gantryGreen: new THREE.MeshStandardMaterial({ color: 0x047857, map: gantryGreenTex || null, roughness: 0.35 }),
+      gantryBlue: new THREE.MeshStandardMaterial({ color: 0x1D4ED8, map: gantryBlueTex || null, roughness: 0.35 }),
+      speedLimit: new THREE.MeshStandardMaterial({ color: 0xF8FAFC, map: speedLimitTex || null, roughness: 0.25 })
     };
 
     // Dynamic Road Ribbon Group (updated with real route curvature)
@@ -1671,6 +1852,8 @@ _updateCalloutPosition(index = this.selectedVehicle) {
       rightCurb: createRibbonGeo(MAX_RIBBON_SAMPLES),
       leftGuardrail: createRibbonGeo(MAX_RIBBON_SAMPLES),
       rightGuardrail: createRibbonGeo(MAX_RIBBON_SAMPLES),
+      leftDrain: createRibbonGeo(MAX_RIBBON_SAMPLES),
+      rightDrain: createRibbonGeo(MAX_RIBBON_SAMPLES),
     };
 
     this._trackingRoadGroup.add(new THREE.Mesh(this._trackingGeos.road, this._trackingMaterials.road));
@@ -1681,6 +1864,8 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     this._trackingRoadGroup.add(new THREE.Mesh(this._trackingGeos.rightCurb, this._trackingMaterials.curb));
     this._trackingRoadGroup.add(new THREE.Mesh(this._trackingGeos.leftGuardrail, this._trackingMaterials.guardrail));
     this._trackingRoadGroup.add(new THREE.Mesh(this._trackingGeos.rightGuardrail, this._trackingMaterials.guardrail));
+    this._trackingRoadGroup.add(new THREE.Mesh(this._trackingGeos.leftDrain, this._trackingMaterials.drain));
+    this._trackingRoadGroup.add(new THREE.Mesh(this._trackingGeos.rightDrain, this._trackingMaterials.drain));
 
     // Object pool for Guardrail Posts (60 pre-allocated meshes)
     this._trackingPostPool = [];
@@ -1716,47 +1901,65 @@ _updateCalloutPosition(index = this.selectedVehicle) {
       this._trackingPolePool.push(poleGroup);
     }
 
-    // Object pool for Scenery: Realistic Tropical Highway Landscape & Infrastructure (16 pre-allocated groups)
-    // Red stick cranes and fake roadside warehouses are eliminated in favor of real highway corridor features.
+    // Object pool for Scenery: Realistic Tropical Highway Corridor & Logistics Infrastructure (24 pre-allocated groups)
     this._trackingSceneryPool = [];
 
     const foliageMat = new THREE.MeshStandardMaterial({ color: 0x1E3A20, roughness: 0.92 });
     const palmFrondMat = new THREE.MeshStandardMaterial({ color: 0x22542A, roughness: 0.88 });
     const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4A3728, roughness: 0.95 });
     const gantrySteelMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8, roughness: 0.3 });
-    const signGreenMat = new THREE.MeshStandardMaterial({ color: 0x065F46, roughness: 0.4 });
-    const signWhiteMat = new THREE.MeshBasicMaterial({ color: 0xF8FAFC });
     const postMat = new THREE.MeshStandardMaterial({ color: 0xE2E8F0, roughness: 0.5 });
+    const gravelMat = new THREE.MeshStandardMaterial({ color: 0x263238, roughness: 0.96 });
+    const pylonSteelMat = new THREE.MeshStandardMaterial({ color: 0x64748B, metalness: 0.85, roughness: 0.25 });
 
-    for (let sc = 0; sc < 16; sc++) {
+    // Pre-create container textures for roadside depot stacks
+    const contTexEvergreen = getContainerStackTexture(THREE, 0x006837, 'EVERGREEN', 'EISU 894012 3');
+    const contTexMaersk = getContainerStackTexture(THREE, 0x0284C7, 'MAERSK', 'MSKU 948120 4');
+    const contTexMeratus = getContainerStackTexture(THREE, 0xDC2626, 'MERATUS', 'MRTU 410293 8');
+    const contTexSpil = getContainerStackTexture(THREE, 0x1D4ED8, 'SPIL LOGISTICS', 'SPLU 710928 1');
+
+    const contMaterials = [
+      new THREE.MeshStandardMaterial({ color: 0x006837, map: contTexEvergreen || null, roughness: 0.45, metalness: 0.25 }),
+      new THREE.MeshStandardMaterial({ color: 0x0284C7, map: contTexMaersk || null, roughness: 0.45, metalness: 0.25 }),
+      new THREE.MeshStandardMaterial({ color: 0xDC2626, map: contTexMeratus || null, roughness: 0.45, metalness: 0.25 }),
+      new THREE.MeshStandardMaterial({ color: 0x1D4ED8, map: contTexSpil || null, roughness: 0.45, metalness: 0.25 }),
+    ];
+
+    for (let sc = 0; sc < 24; sc++) {
       const scGroup = new THREE.Group();
-      if (sc % 4 === 0) {
-        // Overhead Highway Directional Gantry Sign ("Tol Balikpapan-Samarinda / Kariangau Exit")
-        const colGeo = new THREE.CylinderGeometry(0.18, 0.18, 7.5, 8);
+      const variant = sc % 6;
+
+      if (variant === 0) {
+        // 1. Overhead Highway Directional Gantry Sign ("Tol Balikpapan-Samarinda / Kariangau Exit")
+        scGroup.userData.isGantry = true;
+
+        const colGeo = new THREE.CylinderGeometry(0.2, 0.2, 7.8, 8);
         const colL = new THREE.Mesh(colGeo, gantrySteelMat);
-        colL.position.set(-8.5, 3.75, 0);
+        colL.position.set(-8.5, 3.9, 0);
         scGroup.add(colL);
 
         const colR = new THREE.Mesh(colGeo, gantrySteelMat);
-        colR.position.set(8.5, 3.75, 0);
+        colR.position.set(8.5, 3.9, 0);
         scGroup.add(colR);
 
         const beamGeo = new THREE.BoxGeometry(17.6, 0.45, 0.45);
         const beam = new THREE.Mesh(beamGeo, gantrySteelMat);
-        beam.position.set(0, 7.4, 0);
+        beam.position.set(0, 7.6, 0);
         scGroup.add(beam);
 
-        // Green Highway Exit Guide Signboards
-        const signGeo = new THREE.BoxGeometry(6.5, 2.2, 0.12);
-        const sign = new THREE.Mesh(signGeo, signGreenMat);
-        sign.position.set(-2.5, 6.2, 0);
+        // Green Highway Exit Guide Signboard
+        const signGeo = new THREE.BoxGeometry(7.2, 2.4, 0.12);
+        const sign = new THREE.Mesh(signGeo, this._trackingMaterials.gantryGreen);
+        sign.position.set(-2.8, 6.2, 0);
         scGroup.add(sign);
 
-        const signBorder = new THREE.Mesh(new THREE.BoxGeometry(6.6, 2.3, 0.08), signWhiteMat);
-        signBorder.position.set(-2.5, 6.2, 0);
-        scGroup.add(signBorder);
-      } else if (sc % 4 === 1) {
-        // Tropical Indonesian Roadside Palm Cluster (3 oil palms with curved trunks)
+        // Blue Rest Area / WIM Service Signboard
+        const blueSignGeo = new THREE.BoxGeometry(3.8, 2.2, 0.12);
+        const blueSign = new THREE.Mesh(blueSignGeo, this._trackingMaterials.gantryBlue);
+        blueSign.position.set(4.2, 6.2, 0);
+        scGroup.add(blueSign);
+      } else if (variant === 1) {
+        // 2. Tropical Indonesian Roadside Palm Cluster (3 oil palms with curved trunks)
         for (let p = 0; p < 3; p++) {
           const palm = new THREE.Group();
           const pTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 7.5, 8), trunkMat);
@@ -1774,8 +1977,73 @@ _updateCalloutPosition(index = this.selectedVehicle) {
           palm.position.set((p - 1) * 5.5, 0, (p % 2 ? 3 : -3));
           scGroup.add(palm);
         }
-      } else if (sc % 4 === 2) {
-        // Broad Canopy Acacia Mangium & Albizia Rain Trees (Lush roadside greenery)
+      } else if (variant === 2) {
+        // 3. Roadside Intermodal Logistics Container Depot Yard
+        const pad = new THREE.Mesh(new THREE.BoxGeometry(16, 0.1, 10), gravelMat);
+        pad.position.set(0, 0.05, 0);
+        scGroup.add(pad);
+
+        // 4-container stack (2 bottom, 2 top)
+        for (let s = 0; s < 4; s++) {
+          const cGeo = new THREE.BoxGeometry(2.44, 2.59, 12.19);
+          const cMat = contMaterials[(sc + s) % contMaterials.length];
+          const container = new THREE.Mesh(cGeo, cMat);
+          const col = s % 2;
+          const tier = Math.floor(s / 2);
+          container.position.set((col - 0.5) * 3.2, tier * 2.65 + 1.35, 0);
+          container.castShadow = true;
+          scGroup.add(container);
+        }
+
+        // Industrial yard floodlight pole
+        const floodPole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 9.5, 8), gantrySteelMat);
+        floodPole.position.set(-6.5, 4.75, 4.2);
+        scGroup.add(floodPole);
+
+        const floodLamp = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.25, 0.4), this._trackingMaterials.lampHead);
+        floodLamp.position.set(-6.5, 9.5, 4.2);
+        scGroup.add(floodLamp);
+      } else if (variant === 3) {
+        // 4. High-Voltage Steel Lattice Power Transmission Pylon (SUTET Kariangau Power 150kV)
+        const pylonGroup = new THREE.Group();
+
+        const legH = 18;
+        const legGeo = new THREE.CylinderGeometry(0.08, 0.12, legH, 6);
+        for (const lx of [-1, 1]) {
+          for (const lz of [-1, 1]) {
+            const leg = new THREE.Mesh(legGeo, pylonSteelMat);
+            leg.position.set(lx * 1.8, legH / 2, lz * 1.8);
+            pylonGroup.add(leg);
+          }
+        }
+
+        const arm1 = new THREE.Mesh(new THREE.BoxGeometry(12, 0.35, 0.5), pylonSteelMat);
+        arm1.position.set(0, 13, 0);
+        pylonGroup.add(arm1);
+
+        const arm2 = new THREE.Mesh(new THREE.BoxGeometry(9, 0.35, 0.5), pylonSteelMat);
+        arm2.position.set(0, 17, 0);
+        pylonGroup.add(arm2);
+
+        const insGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.4, 8);
+        for (const ix of [-5.5, -2.5, 2.5, 5.5]) {
+          const ins = new THREE.Mesh(insGeo, this._trackingMaterials.speedLimit);
+          ins.position.set(ix, 12.2, 0);
+          pylonGroup.add(ins);
+        }
+
+        const pierGeo = new THREE.BoxGeometry(0.8, 0.6, 0.8);
+        for (const lx of [-1, 1]) {
+          for (const lz of [-1, 1]) {
+            const pier = new THREE.Mesh(pierGeo, this._trackingMaterials.curb);
+            pier.position.set(lx * 1.8, 0.3, lz * 1.8);
+            pylonGroup.add(pier);
+          }
+        }
+
+        scGroup.add(pylonGroup);
+      } else if (variant === 4) {
+        // 5. Broad Canopy Acacia Mangium & Albizia Rain Trees (Lush roadside greenery)
         for (let t = 0; t < 2; t++) {
           const tree = new THREE.Group();
           const tTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.5, 4.5, 8), trunkMat);
@@ -1798,16 +2066,25 @@ _updateCalloutPosition(index = this.selectedVehicle) {
           scGroup.add(tree);
         }
       } else {
-        // Highway Kilometer Post Marker & Roadside Embankment Brush
+        // 6. Highway Kilometer Post Marker & Speed Limit Sign ("60 KM/J")
         const kmPostGeo = new THREE.BoxGeometry(0.35, 0.85, 0.25);
         const kmPost = new THREE.Mesh(kmPostGeo, postMat);
         kmPost.position.set(0, 0.42, 0);
         scGroup.add(kmPost);
 
-        const kmCap = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.2, 4), signGreenMat);
+        const kmCap = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.2, 4), this._trackingMaterials.gantryGreen);
         kmCap.position.set(0, 0.95, 0);
         kmCap.rotation.y = Math.PI / 4;
         scGroup.add(kmCap);
+
+        const signPole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.4, 8), gantrySteelMat);
+        signPole.position.set(1.5, 1.2, 0);
+        scGroup.add(signPole);
+
+        const signDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.04, 24), this._trackingMaterials.speedLimit);
+        signDisc.rotation.x = Math.PI / 2;
+        signDisc.position.set(1.5, 2.2, 0);
+        scGroup.add(signDisc);
 
         for (let s = 0; s < 3; s++) {
           const shrub = new THREE.Mesh(new THREE.SphereGeometry(1.2 + s * 0.3, 6, 5), foliageMat);
@@ -1821,7 +2098,6 @@ _updateCalloutPosition(index = this.selectedVehicle) {
       this._trackingRoadGroup.add(scGroup);
       this._trackingSceneryPool.push(scGroup);
     }
-
     // Dedicated truck mount group
     this._trackingTruckGroup = new THREE.Group();
     this._trackingTruckGroup.name = 'tracking-truck-mount';
@@ -1920,6 +2196,10 @@ _updateCalloutPosition(index = this.selectedVehicle) {
     updateRibbon(geos.leftGuardrail, -7.6, 0.12, 0.55);
     updateRibbon(geos.rightGuardrail, 7.6, 0.12, 0.55);
 
+    // Concrete U-Ditch Drainage Channels (+/- 8.3m)
+    if (geos.leftDrain) updateRibbon(geos.leftDrain, -8.3, 0.75, -0.04);
+    if (geos.rightDrain) updateRibbon(geos.rightDrain, 8.3, 0.75, -0.04);
+
     // 6. Guardrail Posts from Pool
     let postIdx = 0;
     for (let i = 0; i < numSamples; i += 3) {
@@ -1952,17 +2232,21 @@ _updateCalloutPosition(index = this.selectedVehicle) {
 
     // 8. Roadside Highway Infrastructure & Natural Tropical Corridor
     let scIdx = 0;
-    for (let i = 2; i < numSamples; i += 16) {
-      if (scIdx < this._trackingSceneryPool.length) {
-        const s = samples[i];
-        const side = (i % 32 === 2) ? -18 : 18;
-        const scGroup = this._trackingSceneryPool[scIdx];
-        if (scGroup) {
+    for (let i = 2; i < numSamples && scIdx < this._trackingSceneryPool.length; i += 5) {
+      const s = samples[i];
+      const scGroup = this._trackingSceneryPool[scIdx];
+      if (scGroup) {
+        if (scGroup.userData.isGantry) {
+          scGroup.position.set(s.x, 0, s.z);
+          scGroup.rotation.y = Math.atan2(s.tx, s.tz);
+        } else {
+          const side = (scIdx % 2 === 0) ? -22 : 22;
           scGroup.position.set(s.x + s.nx * side, 0, s.z + s.nz * side);
-          scGroup.visible = true;
+          scGroup.rotation.y = Math.atan2(s.tx, s.tz);
         }
-        scIdx++;
+        scGroup.visible = true;
       }
+      scIdx++;
     }
     for (let sc = scIdx; sc < this._trackingSceneryPool.length; sc++) {
       this._trackingSceneryPool[sc].visible = false;
