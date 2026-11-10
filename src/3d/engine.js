@@ -1,5 +1,5 @@
 // ATLAS 3D Authoritative Geospatial Map Engine
-// MapLibre GL JS + Three.js WebGL Custom Layer Integration (HERMES REALISM LOCK v4.0)
+// MapLibre GL JS + Three.js WebGL Custom Layer Integration
 // Center: Kariangau - Balikpapan Strategic Logistics District, East Kalimantan
 // Copyright © 2026 Kevin Oloan Simatupang. All rights reserved.
 

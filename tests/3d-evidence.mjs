@@ -1,4 +1,4 @@
-// ATLAS True 3D Verification & Visual Evidence Suite (HERMES REALISM LOCK v4.0)
+// ATLAS True 3D Verification & Visual Evidence Suite (ATLAS 3D fidelity tests)
 // Captures 20 verified high-resolution Chromium screenshots across S01, S02, and S03.
 // Enforces: Real Geographic Basemap, Authentically Loaded GLB Asset, 5 Commercial Classes,
 // Zero Duplicate Files, Measured Performance Metrics, Deterministic Clock Verification.
@@ -49,7 +49,7 @@ const port = server.address().port;
 const url = `http://127.0.0.1:${port}/`;
 
 const report = {
-  version: 'Hermes Realism Lock v4.1',
+  version: 'ATLAS 3D visual verification',
   timestamp: new Date().toISOString(),
   screenshots: [],
   assertions: [],
@@ -363,10 +363,10 @@ try {
     }
   });
   await mapPage.waitForTimeout(600);
-  await captureProof(mapPage, '20-comparison-v3-vs-v4.png', '20. Hermes Realism Lock v4.0 Full Production Digital Twin Transformation');
+  await captureProof(mapPage, '20-comparison-v3-vs-v4.png', '20. ATLAS 3D visual verification Full Production Digital Twin Transformation');
   report.assertions.push('Full production digital twin transformation verified');
 
-  // --- HERMES VISUAL INTEGRITY v4.1.2 EXTENDED VERIFICATION ---
+  // --- 3D tracking and camera verification EXTENDED VERIFICATION ---
 
   // 21. S03 Desktop Follow TRK-001 (Hero Pilot 40ft Container Truck in Kariangau Corridor)
   await mapPage.evaluate(async () => {
@@ -997,15 +997,6 @@ try {
       if (existsSync(srcPath)) {
         copyFileSync(srcPath, `${outDir}/${dst}`);
         copyFileSync(srcPath, `${outDir}/after/${dst}`);
-      }
-    }
-
-    // Copy to brain artifacts directory if running in Antigravity environment
-    const brainDir = 'C:/Users/ACCOUNTING/.gemini/antigravity/brain/af8e15a6-00e8-4e15-99c6-27c820725405';
-    if (existsSync(brainDir)) {
-      for (const [, dst] of keyCopies) {
-        const p = `${outDir}/${dst}`;
-        if (existsSync(p)) copyFileSync(p, `${brainDir}/${dst}`);
       }
     }
   } catch (archiveErr) {
