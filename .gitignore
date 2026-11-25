@@ -2,3 +2,23 @@ node_modules/
 artifacts/
 .DS_Store
 Thumbs.db
+
+# local environment and credentials
+.env
+.env.*
+!.env.example
+
+# generated and temporary files
+.vercel/
+dist/
+build/
+coverage/
+.cache/
+.turbo/
+*.log
+*.tsbuildinfo
+*.tmp
+
+# operating system
+.DS_Store
+Thumbs.db
